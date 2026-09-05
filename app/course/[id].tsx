@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -22,14 +23,8 @@ import {
   Clock,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import {
-  COURSES,
-  COURSE_MESSAGES,
-  STUDY_REQUESTS,
-  Course,
-  Message,
-  StudyRequest,
-} from '@/constants/mockData';
+import type { Course, Message, StudyRequest } from '@/constants/mockData';
+import { useCourses, useCourseMessages, useStudyRequests } from '@/hooks/useStudyData';
 
 type Tab = 'chat' | 'requests';
 
@@ -44,20 +39,14 @@ export default function CourseHubScreen() {
 
   const isWide = width > 768;
 
+  const { data: courses, loading: coursesLoading } = useCourses();
   const course = useMemo(
-    () => COURSES.find((c) => c.id === id) ?? null,
-    [id],
+    () => courses.find((c) => c.id === id) ?? null,
+    [courses, id],
   );
 
-  const messages = useMemo(
-    () => (id ? COURSE_MESSAGES[id] ?? [] : []),
-    [id],
-  );
-
-  const courseRequests = useMemo(
-    () => STUDY_REQUESTS.filter((sr) => sr.courseId === id),
-    [id],
-  );
+  const { data: messages } = useCourseMessages(id ?? '');
+  const { data: courseRequests } = useStudyRequests(id ?? '');
 
   const handleSend = useCallback(() => {
     if (!messageText.trim()) return;
@@ -193,6 +182,18 @@ export default function CourseHubScreen() {
     ),
     [isWide],
   );
+
+  // ───────────────────────── loading ─────────────────────────
+
+  if (coursesLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // ───────────────────────── fallback ─────────────────────────
 

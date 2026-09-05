@@ -24,15 +24,9 @@ import {
   Settings,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import { CURRENT_USER, COURSES, PEER_PODS, SOLO_TASKS } from '@/constants/mockData';
-
-/* ------------------------------------------------------------------ */
-/*  Derived stats                                                     */
-/* ------------------------------------------------------------------ */
-
-const courseCount = COURSES.length;
-const podCount = PEER_PODS.length;
-const taskCount = SOLO_TASKS.length;
+import { useDemoUser } from '@/contexts/DemoUserContext';
+import { useCourses, usePods, useSoloTasks } from '@/hooks/useStudyData';
+import UserSwitcher from '@/components/UserSwitcher';
 
 /* ------------------------------------------------------------------ */
 /*  Small reusable pieces                                             */
@@ -55,6 +49,18 @@ function PrivacyItem({ label }: { label: string }) {
 
 export default function ProfileScreen() {
   const { width } = useWindowDimensions();
+  const { currentUser } = useDemoUser();
+  const { data: courses } = useCourses();
+  const { data: pods } = usePods();
+  const { data: soloTasks } = useSoloTasks();
+
+  const courseCount = courses.length;
+  const podCount = pods.length;
+  const taskCount = soloTasks.length;
+
+  const hasInstagram = !!currentUser.instagram;
+  const hasDiscord = !!currentUser.discord;
+  const hasSocialLinks = hasInstagram || hasDiscord;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -73,25 +79,29 @@ export default function ProfileScreen() {
         {/* ──────────────── Avatar + identity ──────────────── */}
         <View style={styles.identitySection}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarInitials}>{CURRENT_USER.initials}</Text>
+            <Text style={styles.avatarInitials}>{currentUser.initials}</Text>
           </View>
 
-          <Text style={styles.name}>{CURRENT_USER.name}</Text>
+          <Text style={styles.name}>{currentUser.name}</Text>
 
           <View style={styles.emailRow}>
             <Mail size={14} color={Colors.neutral[400]} />
-            <Text style={styles.email}>{CURRENT_USER.email}</Text>
+            <Text style={styles.email}>{currentUser.email}</Text>
           </View>
 
           <View style={styles.badgeRow}>
             <View style={styles.badge}>
               <GraduationCap size={13} color={Colors.primary[500]} />
-              <Text style={styles.badgeText}>{CURRENT_USER.year}</Text>
+              <Text style={styles.badgeText}>{currentUser.year}</Text>
             </View>
             <View style={styles.badge}>
               <BookOpen size={13} color={Colors.primary[500]} />
-              <Text style={styles.badgeText}>{CURRENT_USER.major}</Text>
+              <Text style={styles.badgeText}>{currentUser.major}</Text>
             </View>
+          </View>
+
+          <View style={{ marginTop: Spacing.md }}>
+            <UserSwitcher />
           </View>
         </View>
 
@@ -120,23 +130,35 @@ export default function ProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Social Links</Text>
 
-          <View style={styles.socialItem}>
-            <Instagram size={18} color={Colors.neutral[600]} />
-            <Text style={styles.socialLabel}>Instagram</Text>
-            <Text style={styles.socialValue}>{CURRENT_USER.instagram}</Text>
-          </View>
+          {hasSocialLinks ? (
+            <>
+              {hasInstagram && (
+                <View style={styles.socialItem}>
+                  <Instagram size={18} color={Colors.neutral[600]} />
+                  <Text style={styles.socialLabel}>Instagram</Text>
+                  <Text style={styles.socialValue}>{currentUser.instagram}</Text>
+                </View>
+              )}
 
-          <View style={styles.divider} />
+              {hasInstagram && hasDiscord && <View style={styles.divider} />}
 
-          <View style={styles.socialItem}>
-            <MessageCircle size={18} color={Colors.neutral[600]} />
-            <Text style={styles.socialLabel}>Discord</Text>
-            <Text style={styles.socialValue}>{CURRENT_USER.discord}</Text>
-          </View>
+              {hasDiscord && (
+                <View style={styles.socialItem}>
+                  <MessageCircle size={18} color={Colors.neutral[600]} />
+                  <Text style={styles.socialLabel}>Discord</Text>
+                  <Text style={styles.socialValue}>{currentUser.discord}</Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <Text style={styles.socialNote}>No social links added yet</Text>
+          )}
 
-          <Text style={styles.socialNote}>
-            Social links are only visible to your Pod members
-          </Text>
+          {hasSocialLinks && (
+            <Text style={styles.socialNote}>
+              Social links are only visible to your Pod members
+            </Text>
+          )}
         </View>
 
         {/* ──────────────── Privacy ──────────────── */}

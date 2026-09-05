@@ -13,6 +13,7 @@ import {
   SourceSerifPro_700Bold,
 } from '@expo-google-fonts/source-serif-pro';
 import * as SplashScreen from 'expo-splash-screen';
+import { DemoUserProvider } from '@/contexts/DemoUserContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -38,7 +39,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <DemoUserProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
@@ -56,6 +57,6 @@ export default function RootLayout() {
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="dark" />
-    </>
+    </DemoUserProvider>
   );
 }

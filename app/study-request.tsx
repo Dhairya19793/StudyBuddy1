@@ -24,7 +24,8 @@ import {
   Check,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import { COURSES, COLLABORATION_PREFERENCES } from '@/constants/mockData';
+import { COLLABORATION_PREFERENCES } from '@/constants/mockData';
+import { useCourses } from '@/hooks/useStudyData';
 
 const COLLAB_ICONS: Record<string, React.ElementType> = {
   'text-only': MessageSquare,
@@ -38,6 +39,7 @@ const GROUP_SIZES = [2, 3, 4, 5, '6+'] as const;
 export default function StudyRequestScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const { data: courses } = useCourses();
 
   // Form state
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
@@ -141,7 +143,7 @@ export default function StudyRequestScreen() {
           <View style={styles.section}>
             <Text style={styles.label}>COURSE</Text>
             <View style={styles.chipRow}>
-              {COURSES.map((course) => {
+              {courses.map((course) => {
                 const isSelected = selectedCourseId === course.id;
                 return (
                   <Pressable

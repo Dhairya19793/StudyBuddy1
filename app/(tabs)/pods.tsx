@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,7 +20,8 @@ import {
   MapPin,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import { PEER_PODS, PeerPod } from '@/constants/mockData';
+import { PeerPod } from '@/constants/mockData';
+import { usePods } from '@/hooks/useStudyData';
 
 /* ── Colour tokens ──────────────────────────────── */
 const FOREST_GREEN = '#2D5F3A';
@@ -44,6 +46,7 @@ function avatarColor(index: number) {
 export default function PodsScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const { data: pods, loading } = usePods();
 
   const isWideScreen = width > 768;
   const numColumns = isWideScreen ? 2 : 1;
@@ -232,6 +235,17 @@ export default function PodsScreen() {
 
   const keyExtractor = useCallback((item: PeerPod) => item.id, []);
 
+  /* ── Loading state ───────────────────────────── */
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   /* ── Render ───────────────────────────────────── */
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -245,13 +259,13 @@ export default function PodsScreen() {
         {/* Pod list */}
         <FlatList
           key={numColumns}
-          data={PEER_PODS}
+          data={pods}
           renderItem={renderPodCard}
           keyExtractor={keyExtractor}
           numColumns={numColumns}
           contentContainerStyle={[
             styles.listContent,
-            PEER_PODS.length === 0 && styles.listContentEmpty,
+            pods.length === 0 && styles.listContentEmpty,
           ]}
           columnWrapperStyle={isWideScreen ? styles.columnWrapper : undefined}
           showsVerticalScrollIndicator={false}
@@ -273,6 +287,12 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    backgroundColor: OFF_WHITE,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: OFF_WHITE,
   },
 

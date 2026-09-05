@@ -8,12 +8,14 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { BookOpen, MessageSquare, ChevronRight, Search } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import { COURSES, Course } from '@/constants/mockData';
+import { Course } from '@/constants/mockData';
+import { useCourses } from '@/hooks/useStudyData';
 
 function getCourseAbbreviation(code: string): string {
   const prefix = code.split(/\s+/)[0].toUpperCase();
@@ -21,6 +23,7 @@ function getCourseAbbreviation(code: string): string {
   if (prefix.startsWith('MATH')) return 'MA';
   if (prefix.startsWith('PHIL')) return 'PH';
   if (prefix.startsWith('STAT')) return 'ST';
+  if (prefix.startsWith('ENGL')) return 'EN';
   return prefix.substring(0, 2);
 }
 
@@ -28,19 +31,20 @@ export default function CoursesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const { data: courses, loading } = useCourses();
 
   const isWideScreen = width > 768;
   const numColumns = isWideScreen ? 2 : 1;
 
   const filteredCourses = useMemo(() => {
-    if (!searchQuery.trim()) return COURSES;
+    if (!searchQuery.trim()) return courses;
     const query = searchQuery.toLowerCase().trim();
-    return COURSES.filter(
+    return courses.filter(
       (course) =>
         course.code.toLowerCase().includes(query) ||
         course.name.toLowerCase().includes(query)
     );
-  }, [searchQuery]);
+  }, [searchQuery, courses]);
 
   const handleCoursePress = useCallback(
     (courseId: string) => {
@@ -131,6 +135,16 @@ export default function CoursesScreen() {
     []
   );
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
@@ -187,6 +201,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     paddingHorizontal: Spacing.lg,

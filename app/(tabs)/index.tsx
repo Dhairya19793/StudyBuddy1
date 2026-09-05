@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -20,13 +21,9 @@ import {
   Heart,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import {
-  CURRENT_USER,
-  COURSES,
-  STUDY_REQUESTS,
-  PEER_PODS,
-  SOLO_TASKS,
-} from '@/constants/mockData';
+import { useDemoUser } from '@/contexts/DemoUserContext';
+import { useCourses, useStudyRequests, usePods, useSoloTasks } from '@/hooks/useStudyData';
+import UserSwitcher from '@/components/UserSwitcher';
 
 /* ─── helpers ────────────────────────────────────────────── */
 
@@ -37,17 +34,33 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
-const firstName = CURRENT_USER.name.split(' ')[0];
-const activePods = PEER_PODS.length;
-const tasksDue = SOLO_TASKS.filter((t) => !t.completed).length;
-const courseCount = COURSES.length;
-
 /* ─── component ──────────────────────────────────────────── */
 
 export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isWide = width > 768;
+
+  const { currentUser } = useDemoUser();
+  const { data: courses, loading: coursesLoading } = useCourses();
+  const { data: studyRequests } = useStudyRequests();
+  const { data: pods } = usePods();
+  const { data: soloTasks } = useSoloTasks();
+
+  const firstName = currentUser.name.split(' ')[0];
+  const activePods = pods.length;
+  const tasksDue = soloTasks.filter((t) => !t.completed).length;
+  const courseCount = courses.length;
+
+  if (coursesLoading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -65,9 +78,7 @@ export default function HomeScreen() {
             <Text style={styles.subtitle}>Ready to study?</Text>
           </View>
 
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{CURRENT_USER.initials}</Text>
-          </View>
+          <UserSwitcher />
         </View>
 
         {/* ── QUICK STATS ────────────────────────────────── */}
@@ -99,7 +110,7 @@ export default function HomeScreen() {
         />
 
         <View style={isWide ? styles.requestsGrid : undefined}>
-          {STUDY_REQUESTS.slice(0, isWide ? 4 : 3).map((req) => (
+          {studyRequests.slice(0, isWide ? 4 : 3).map((req) => (
             <TouchableOpacity
               key={req.id}
               activeOpacity={0.7}
@@ -149,7 +160,7 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.podsScroll}
         >
-          {PEER_PODS.map((pod) => {
+          {pods.map((pod) => {
             const progress =
               pod.tasksTotal > 0 ? pod.tasksDone / pod.tasksTotal : 0;
 

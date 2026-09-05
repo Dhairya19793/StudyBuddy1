@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Animated,
   useWindowDimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -22,8 +23,8 @@ import {
   Filter,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import { SOLO_TASKS, COURSES } from '@/constants/mockData';
 import type { SoloTask } from '@/constants/mockData';
+import { useCourses, useSoloTasks } from '@/hooks/useStudyData';
 
 /* ─── types ─────────────────────────────────────────────────── */
 
@@ -34,11 +35,6 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'active', label: 'Active' },
   { key: 'stuck', label: 'Stuck' },
   { key: 'completed', label: 'Completed' },
-];
-
-const COURSE_OPTIONS = [
-  { code: null as string | null, label: 'No course' },
-  ...COURSES.map((c) => ({ code: c.code, label: c.code })),
 ];
 
 /* ─── toast component ───────────────────────────────────────── */
@@ -80,8 +76,27 @@ export default function WorkspaceScreen() {
   const { width } = useWindowDimensions();
   const isWide = width > 768;
 
+  /* ── data hooks ── */
+  const { data: courses } = useCourses();
+  const {
+    data: tasks,
+    loading,
+    addTask: addTaskToDb,
+    toggleComplete,
+    toggleStuck,
+    deleteTask,
+  } = useSoloTasks();
+
+  /* ── course options (derived from courses) ── */
+  const courseOptions = useMemo(
+    () => [
+      { code: null as string | null, label: 'No course' },
+      ...courses.map((c) => ({ code: c.id, label: c.code })),
+    ],
+    [courses]
+  );
+
   /* ── state ── */
-  const [tasks, setTasks] = useState<SoloTask[]>(SOLO_TASKS);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
   const [newTaskText, setNewTaskText] = useState('');
   const [selectedCourseIdx, setSelectedCourseIdx] = useState(0);
@@ -118,45 +133,13 @@ export default function WorkspaceScreen() {
   });
 
   /* ── handlers ── */
-  const toggleComplete = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? { ...t, completed: !t.completed, isStuck: !t.completed ? false : t.isStuck }
-          : t
-      )
-    );
-  }, []);
-
-  const toggleStuck = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, isStuck: !t.isStuck } : t
-      )
-    );
-  }, []);
-
-  const deleteTask = useCallback((id: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const addTask = useCallback(() => {
+  const handleAddTask = useCallback(async () => {
     const trimmed = newTaskText.trim();
     if (!trimmed) return;
-
-    const course = COURSE_OPTIONS[selectedCourseIdx];
-    const newTask: SoloTask = {
-      id: `st_${Date.now()}`,
-      text: trimmed,
-      courseCode: course.code ?? undefined,
-      completed: false,
-      isStuck: false,
-      createdAt: 'Just now',
-    };
-
-    setTasks((prev) => [newTask, ...prev]);
+    const course = courseOptions[selectedCourseIdx];
+    await addTaskToDb(trimmed, course.code);
     setNewTaskText('');
-  }, [newTaskText, selectedCourseIdx]);
+  }, [newTaskText, selectedCourseIdx, courseOptions, addTaskToDb]);
 
   const createRequest = useCallback(() => {
     setToastKey((k) => k + 1);
@@ -167,12 +150,12 @@ export default function WorkspaceScreen() {
   }, []);
 
   const cycleCourse = useCallback(() => {
-    setSelectedCourseIdx((prev) => (prev + 1) % COURSE_OPTIONS.length);
-  }, []);
+    setSelectedCourseIdx((prev) => (prev + 1) % courseOptions.length);
+  }, [courseOptions]);
 
   /* ── find course color ── */
   const getCourseColor = (code: string) => {
-    const course = COURSES.find((c) => c.code === code);
+    const course = courses.find((c) => c.code === code);
     return course?.color ?? Colors.primary[500];
   };
 
@@ -282,6 +265,17 @@ export default function WorkspaceScreen() {
 
   const keyExtractor = useCallback((item: SoloTask) => item.id, []);
 
+  /* ── loading state ── */
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   /* ── header component for FlatList ── */
   const ListHeader = (
     <>
@@ -361,7 +355,7 @@ export default function WorkspaceScreen() {
             placeholderTextColor={Colors.neutral[400]}
             value={newTaskText}
             onChangeText={setNewTaskText}
-            onSubmitEditing={addTask}
+            onSubmitEditing={handleAddTask}
             returnKeyType="done"
           />
         </View>
@@ -372,12 +366,12 @@ export default function WorkspaceScreen() {
           activeOpacity={0.7}
         >
           <Text style={styles.courseSelectorText} numberOfLines={1}>
-            {COURSE_OPTIONS[selectedCourseIdx].label}
+            {courseOptions[selectedCourseIdx].label}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={addTask}
+          onPress={handleAddTask}
           style={[
             styles.addBtn,
             !newTaskText.trim() && styles.addBtnDisabled,
@@ -449,6 +443,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: 120,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* header */

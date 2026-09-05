@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -28,14 +29,8 @@ import {
   ChevronUp,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import {
-  PEER_PODS,
-  POD_MESSAGES,
-  POD_TASKS,
-  PeerPod,
-  Message,
-  PodMember,
-} from '@/constants/mockData';
+import type { PeerPod, Message, PodMember } from '@/constants/mockData';
+import { usePods, usePodMessages, usePodTasks } from '@/hooks/useStudyData';
 
 /* ── Colour tokens ──────────────────────────────── */
 const FOREST_GREEN = '#2D5F3A';
@@ -64,16 +59,22 @@ export default function PodDetailScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
 
-  const pod = useMemo(() => PEER_PODS.find((p) => p.id === id), [id]);
-  const messages = useMemo(() => (id ? POD_MESSAGES[id] ?? [] : []), [id]);
-  const initialTasks = useMemo(() => (id ? POD_TASKS[id] ?? [] : []), [id]);
+  const { data: allPods, loading: podsLoading } = usePods();
+  const pod = useMemo(() => allPods.find((p) => p.id === id) ?? null, [allPods, id]);
+
+  const { data: messages } = usePodMessages(id ?? '');
+  const { data: podTasks } = usePodTasks(id ?? '');
 
   const [activeTab, setActiveTab] = useState<Tab>('Chat');
   const [chatInput, setChatInput] = useState('');
   const [taskInput, setTaskInput] = useState('');
-  const [tasks, setTasks] = useState(initialTasks.map((t) => ({ ...t })));
+  const [tasks, setTasks] = useState(podTasks);
   const [meetingAccepted, setMeetingAccepted] = useState(false);
   const [meetingDeclined, setMeetingDeclined] = useState(false);
+
+  useEffect(() => {
+    setTasks(podTasks);
+  }, [podTasks]);
 
   const containerMaxWidth = width > 800 ? 800 : undefined;
 
@@ -95,6 +96,17 @@ export default function PodDetailScreen() {
   }, [taskInput]);
 
   const completedCount = useMemo(() => tasks.filter((t) => t.completed).length, [tasks]);
+
+  /* ── Loading ──────────────────────────────────── */
+  if (podsLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={FOREST_GREEN} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   /* ── Guard ─────────────────────────────────────── */
   if (!pod) {
