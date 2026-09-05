@@ -10,9 +10,10 @@ import {
   KeyboardAvoidingView,
   useWindowDimensions,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   X,
   Send,
@@ -22,10 +23,13 @@ import {
   MapPin,
   Shuffle,
   Check,
+  Circle,
+  CheckCircle2,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import { COLLABORATION_PREFERENCES } from '@/constants/mockData';
-import { useCourses } from '@/hooks/useStudyData';
+import { HELP_TYPE_OPTIONS } from '@/constants/mockData';
+import type { HelpType } from '@/constants/mockData';
+import { useCourses, useCreateStudyRequest } from '@/hooks/useStudyData';
 
 const COLLAB_ICONS: Record<string, React.ElementType> = {
   'text-only': MessageSquare,
@@ -34,45 +38,81 @@ const COLLAB_ICONS: Record<string, React.ElementType> = {
   flexible: Shuffle,
 };
 
-const GROUP_SIZES = [2, 3, 4, 5, '6+'] as const;
+const COLLAB_PREFS = [
+  { key: 'text-only', label: 'Text Only' },
+  { key: 'online', label: 'Online' },
+  { key: 'in-person', label: 'In Person' },
+  { key: 'flexible', label: 'Flexible' },
+];
+
+const GROUP_SIZE_OPTIONS = [
+  { key: 2, label: 'One partner' },
+  { key: 4, label: 'Small pod (3-5)' },
+];
 
 export default function StudyRequestScreen() {
   const router = useRouter();
+  const { courseId } = useLocalSearchParams<{ courseId?: string }>();
   const { width } = useWindowDimensions();
   const { data: courses } = useCourses();
+  const createStudyRequest = useCreateStudyRequest();
 
   // Form state
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const [helpNeeded, setHelpNeeded] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(courseId ?? null);
+  const [selectedHelpType, setSelectedHelpType] = useState<HelpType | null>(null);
   const [topic, setTopic] = useState('');
   const [availability, setAvailability] = useState('');
   const [selectedPreference, setSelectedPreference] = useState<string | null>(null);
-  const [groupSize, setGroupSize] = useState<number | string | null>(null);
+  const [groupSize, setGroupSize] = useState<number | null>(null);
   const [postToHub, setPostToHub] = useState(true);
 
   // Submission state
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const checkScale = useRef(new Animated.Value(0)).current;
 
   const isFormValid =
     selectedCourseId !== null &&
-    helpNeeded.trim().length > 0 &&
+    selectedHelpType !== null &&
     topic.trim().length > 0;
 
-  const handleSubmit = () => {
-    if (!isFormValid) return;
-    setIsSubmitted(true);
+  const handleSubmit = async () => {
+    if (!isFormValid || isSubmitting) return;
 
-    Animated.spring(checkScale, {
-      toValue: 1,
-      friction: 4,
-      tension: 100,
-      useNativeDriver: true,
-    }).start();
+    // Build helpNeeded from the selected help type label
+    const helpTypeLabel =
+      HELP_TYPE_OPTIONS.find((opt) => opt.key === selectedHelpType)?.label ?? '';
 
-    setTimeout(() => {
-      router.back();
-    }, 1000);
+    setIsSubmitting(true);
+
+    try {
+      await createStudyRequest({
+        courseId: selectedCourseId!,
+        helpType: selectedHelpType!,
+        helpNeeded: helpTypeLabel,
+        topic: topic.trim(),
+        availability: availability.trim(),
+        preference: selectedPreference ?? 'flexible',
+        groupSize: groupSize ?? 2,
+        postToHub,
+      });
+
+      setIsSubmitted(true);
+
+      Animated.spring(checkScale, {
+        toValue: 1,
+        friction: 4,
+        tension: 100,
+        useNativeDriver: true,
+      }).start();
+
+      setTimeout(() => {
+        router.back();
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to create study request:', err);
+      setIsSubmitting(false);
+    }
   };
 
   // Responsive container width
@@ -111,7 +151,7 @@ export default function StudyRequestScreen() {
           <View
             style={[
               styles.headerInner,
-              containerMaxWidth ? { maxWidth: containerMaxWidth, alignSelf: 'center', width: '100%' } : undefined,
+              containerMaxWidth ? { maxWidth: containerMaxWidth, alignSelf: 'center' as const, width: '100%' } : undefined,
             ]}
           >
             <Text style={styles.headerTitle}>New Study Request</Text>
@@ -133,7 +173,7 @@ export default function StudyRequestScreen() {
           contentContainerStyle={[
             styles.scrollContent,
             containerMaxWidth
-              ? { maxWidth: containerMaxWidth, alignSelf: 'center', width: '100%' }
+              ? { maxWidth: containerMaxWidth, alignSelf: 'center' as const, width: '100%' }
               : undefined,
           ]}
           showsVerticalScrollIndicator={false}
@@ -168,22 +208,48 @@ export default function StudyRequestScreen() {
             </View>
           </View>
 
-          {/* ── Help Needed ── */}
+          {/* ── Help Type Selector ── */}
           <View style={styles.section}>
             <Text style={styles.label}>WHAT DO YOU NEED HELP WITH TODAY?</Text>
-            <TextInput
-              style={[
-                styles.textArea,
-                Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {},
-              ]}
-              placeholder="Describe what you're struggling with or want to study..."
-              placeholderTextColor={Colors.neutral[400]}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              value={helpNeeded}
-              onChangeText={setHelpNeeded}
-            />
+            <View style={styles.helpTypeList}>
+              {HELP_TYPE_OPTIONS.map((option) => {
+                const isSelected = selectedHelpType === option.key;
+                return (
+                  <Pressable
+                    key={option.key}
+                    onPress={() => setSelectedHelpType(option.key)}
+                    style={[
+                      styles.helpTypeRow,
+                      isSelected
+                        ? styles.helpTypeRowSelected
+                        : styles.helpTypeRowUnselected,
+                    ]}
+                  >
+                    <View style={styles.helpTypeIndicator}>
+                      {isSelected ? (
+                        <CheckCircle2
+                          size={22}
+                          color={Colors.primary[500]}
+                          fill={Colors.primary[500]}
+                        />
+                      ) : (
+                        <Circle size={22} color={Colors.neutral[300]} />
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.helpTypeText,
+                        isSelected
+                          ? styles.helpTypeTextSelected
+                          : styles.helpTypeTextUnselected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
 
           {/* ── Topic ── */}
@@ -223,7 +289,7 @@ export default function StudyRequestScreen() {
           <View style={styles.section}>
             <Text style={styles.label}>HOW DO YOU WANT TO COLLABORATE?</Text>
             <View style={styles.collabGrid}>
-              {COLLABORATION_PREFERENCES.map((pref) => {
+              {COLLAB_PREFS.map((pref) => {
                 const isSelected = selectedPreference === pref.key;
                 const IconComponent = COLLAB_ICONS[pref.key] ?? Shuffle;
                 return (
@@ -263,28 +329,28 @@ export default function StudyRequestScreen() {
           <View style={styles.section}>
             <Text style={styles.label}>DESIRED GROUP SIZE</Text>
             <View style={styles.groupSizeRow}>
-              {GROUP_SIZES.map((size) => {
-                const isSelected = groupSize === size;
+              {GROUP_SIZE_OPTIONS.map((option) => {
+                const isSelected = groupSize === option.key;
                 return (
                   <Pressable
-                    key={String(size)}
-                    onPress={() => setGroupSize(size)}
+                    key={option.key}
+                    onPress={() => setGroupSize(option.key)}
                     style={[
-                      styles.groupSizePill,
+                      styles.groupSizeCard,
                       isSelected
-                        ? styles.groupSizePillSelected
-                        : styles.groupSizePillUnselected,
+                        ? styles.groupSizeCardSelected
+                        : styles.groupSizeCardUnselected,
                     ]}
                   >
                     <Text
                       style={[
-                        styles.groupSizePillText,
+                        styles.groupSizeCardText,
                         isSelected
-                          ? styles.groupSizePillTextSelected
-                          : styles.groupSizePillTextUnselected,
+                          ? styles.groupSizeCardTextSelected
+                          : styles.groupSizeCardTextUnselected,
                       ]}
                     >
-                      {String(size)}
+                      {option.label}
                     </Text>
                   </Pressable>
                 );
@@ -328,21 +394,27 @@ export default function StudyRequestScreen() {
           style={[
             styles.submitContainer,
             containerMaxWidth
-              ? { maxWidth: containerMaxWidth, alignSelf: 'center', width: '100%' }
+              ? { maxWidth: containerMaxWidth, alignSelf: 'center' as const, width: '100%' }
               : undefined,
           ]}
         >
           <Pressable
             onPress={handleSubmit}
-            disabled={!isFormValid}
+            disabled={!isFormValid || isSubmitting}
             style={({ pressed }) => [
               styles.submitButton,
-              !isFormValid && styles.submitButtonDisabled,
-              pressed && isFormValid && styles.submitButtonPressed,
+              (!isFormValid || isSubmitting) && styles.submitButtonDisabled,
+              pressed && isFormValid && !isSubmitting && styles.submitButtonPressed,
             ]}
           >
-            <Send size={18} color={Colors.neutral[0]} />
-            <Text style={styles.submitButtonText}>Post Study Request</Text>
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color={Colors.neutral[0]} />
+            ) : (
+              <Send size={18} color={Colors.neutral[0]} />
+            )}
+            <Text style={styles.submitButtonText}>
+              {isSubmitting ? 'Posting…' : 'Post Study Request'}
+            </Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -471,18 +543,42 @@ const styles = StyleSheet.create({
     color: Colors.neutral[700],
   },
 
-  /* ── Text Inputs ── */
-  textArea: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.neutral[200],
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    ...Typography.body,
-    color: Colors.neutral[900],
-    minHeight: 100,
-    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {}),
+  /* ── Help Type Selector ── */
+  helpTypeList: {
+    gap: Spacing.sm,
   },
+  helpTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+  },
+  helpTypeRowSelected: {
+    borderColor: Colors.primary[500],
+    backgroundColor: Colors.primary[50],
+  },
+  helpTypeRowUnselected: {
+    borderColor: Colors.neutral[200],
+    backgroundColor: Colors.surface,
+  },
+  helpTypeIndicator: {
+    marginRight: Spacing.sm + 2,
+  },
+  helpTypeText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  helpTypeTextSelected: {
+    color: Colors.primary[500],
+  },
+  helpTypeTextUnselected: {
+    color: Colors.neutral[700],
+  },
+
+  /* ── Text Inputs ── */
   textInput: {
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -551,33 +647,33 @@ const styles = StyleSheet.create({
   /* ── Group Size ── */
   groupSizeRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    gap: Spacing.sm + 2,
   },
-  groupSizePill: {
-    width: 48,
-    height: 42,
+  groupSizeCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  groupSizePillSelected: {
+  groupSizeCardSelected: {
     backgroundColor: Colors.primary[500],
     borderColor: Colors.primary[500],
   },
-  groupSizePillUnselected: {
+  groupSizeCardUnselected: {
     backgroundColor: Colors.surface,
     borderColor: Colors.neutral[300],
   },
-  groupSizePillText: {
+  groupSizeCardText: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 15,
+    fontSize: 14,
     lineHeight: 20,
   },
-  groupSizePillTextSelected: {
+  groupSizeCardTextSelected: {
     color: Colors.neutral[0],
   },
-  groupSizePillTextUnselected: {
+  groupSizeCardTextUnselected: {
     color: Colors.neutral[700],
   },
 

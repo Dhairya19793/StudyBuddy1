@@ -103,6 +103,22 @@ export default function HomeScreen() {
           />
         </View>
 
+        {/* ── CREATE STUDY REQUEST CTA ──────────────────── */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.createRequestCta}
+          onPress={() => router.push('/study-request' as any)}
+        >
+          <View style={styles.createRequestIcon}>
+            <Plus size={20} color={Colors.neutral[0]} />
+          </View>
+          <View style={styles.createRequestText}>
+            <Text style={styles.createRequestTitle}>Create Study Request</Text>
+            <Text style={styles.createRequestSubtitle}>Find classmates to study with</Text>
+          </View>
+          <ChevronRight size={20} color={Colors.primary[400]} />
+        </TouchableOpacity>
+
         {/* ── RECENT STUDY REQUESTS ──────────────────────── */}
         <SectionHeader
           title="Recent Study Requests"
@@ -118,7 +134,7 @@ export default function HomeScreen() {
                 styles.requestCard,
                 isWide && styles.requestCardWide,
               ]}
-              onPress={() => router.push('/courses' as any)}
+              onPress={() => router.push(`/course/${req.courseId}` as any)}
             >
               <View style={styles.requestTopRow}>
                 <View style={styles.courseCodeBadge}>
@@ -543,6 +559,39 @@ const styles = StyleSheet.create({
     ...Typography.small,
     color: Colors.neutral[500],
     flex: 1,
+  },
+
+  /* Create Study Request CTA */
+  createRequestCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary[50],
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.primary[200],
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+    gap: Spacing.md,
+  },
+  createRequestIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary[500],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createRequestText: {
+    flex: 1,
+  },
+  createRequestTitle: {
+    ...Typography.bodySemiBold,
+    color: Colors.primary[700],
+  },
+  createRequestSubtitle: {
+    ...Typography.caption,
+    color: Colors.primary[400],
+    marginTop: 1,
   },
 
   /* FAB */

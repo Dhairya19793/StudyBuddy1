@@ -21,10 +21,20 @@ import {
   MessageSquare,
   Plus,
   Clock,
+  Check,
+  Lightbulb,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import type { Course, Message, StudyRequest } from '@/constants/mockData';
-import { useCourses, useCourseMessages, useStudyRequests } from '@/hooks/useStudyData';
+import type { Course, Message, StudyRequest, HelpType } from '@/constants/mockData';
+import { HELP_TYPE_OPTIONS } from '@/constants/mockData';
+import {
+  useCourses,
+  useCourseMessages,
+  useStudyRequests,
+  useMyInterests,
+  useToggleInterest,
+} from '@/hooks/useStudyData';
+import { useDemoUser } from '@/contexts/DemoUserContext';
 
 type Tab = 'chat' | 'requests';
 
@@ -33,6 +43,7 @@ export default function CourseHubScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const inputRef = useRef<TextInput>(null);
+  const { currentUser } = useDemoUser();
 
   const [activeTab, setActiveTab] = useState<Tab>('chat');
   const [messageText, setMessageText] = useState('');
@@ -45,13 +56,42 @@ export default function CourseHubScreen() {
     [courses, id],
   );
 
-  const { data: messages } = useCourseMessages(id ?? '');
-  const { data: courseRequests } = useStudyRequests(id ?? '');
+  const {
+    data: messages,
+    loading: messagesLoading,
+    refetch: refetchMessages,
+    sendMessage,
+  } = useCourseMessages(id ?? '');
+  const {
+    data: courseRequests,
+    loading: requestsLoading,
+    refetch: refetchRequests,
+  } = useStudyRequests(id ?? '');
+  const {
+    interestedIds,
+    loading: interestsLoading,
+    refetch: refetchInterests,
+  } = useMyInterests();
+  const toggleInterest = useToggleInterest();
 
-  const handleSend = useCallback(() => {
-    if (!messageText.trim()) return;
+  // ───────────────────────── handlers ─────────────────────────
+
+  const handleSend = useCallback(async () => {
+    const trimmed = messageText.trim();
+    if (!trimmed) return;
     setMessageText('');
-  }, [messageText]);
+    await sendMessage(trimmed);
+    refetchMessages();
+  }, [messageText, sendMessage, refetchMessages]);
+
+  const handleToggleInterest = useCallback(
+    async (requestId: string, alreadyInterested: boolean) => {
+      await toggleInterest(requestId, alreadyInterested);
+      refetchInterests();
+      refetchRequests();
+    },
+    [toggleInterest, refetchInterests, refetchRequests],
+  );
 
   // ───────────────────────── helpers ─────────────────────────
 
@@ -66,6 +106,11 @@ export default function CourseHubScreen() {
       case 'flexible':
         return 'Flexible';
     }
+  };
+
+  const getHelpTypeLabel = (helpType: HelpType): string => {
+    const option = HELP_TYPE_OPTIONS.find((o) => o.key === helpType);
+    return option?.label ?? helpType;
   };
 
   // ───────────────────────── renderers ─────────────────────────
@@ -131,56 +176,95 @@ export default function CourseHubScreen() {
   );
 
   const renderStudyRequest = useCallback(
-    ({ item }: { item: StudyRequest }) => (
-      <View style={[styles.srCard, isWide && styles.srCardWide]}>
-        {/* Author row */}
-        <View style={styles.srAuthorRow}>
-          <View style={styles.srAuthorAvatar}>
-            <Text style={styles.srAuthorInitials}>{item.authorInitials}</Text>
+    ({ item }: { item: StudyRequest }) => {
+      const isOwnRequest = item.authorId === currentUser.id;
+      const alreadyInterested = interestedIds.has(item.id);
+
+      return (
+        <View style={[styles.srCard, isWide && styles.srCardWide]}>
+          {/* Author row */}
+          <View style={styles.srAuthorRow}>
+            <View style={styles.srAuthorAvatar}>
+              <Text style={styles.srAuthorInitials}>{item.authorInitials}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.srAuthorName}>{item.authorName}</Text>
+            </View>
+            <Text style={styles.srTime}>{item.createdAt}</Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.srAuthorName}>{item.authorName}</Text>
+
+          {/* Course code badge */}
+          <View style={styles.courseCodeBadge}>
+            <BookOpen size={12} color={Colors.primary[600]} />
+            <Text style={styles.courseCodeBadgeText}>{item.courseCode}</Text>
           </View>
-          <Text style={styles.srTime}>{item.createdAt}</Text>
-        </View>
 
-        {/* Topic */}
-        <Text style={styles.srTopic}>{item.topic}</Text>
-
-        {/* Help needed */}
-        <Text style={styles.srHelp} numberOfLines={3}>
-          {item.helpNeeded}
-        </Text>
-
-        {/* Tags row */}
-        <View style={styles.srTagsRow}>
-          <View style={styles.srTag}>
-            <Text style={styles.srTagText}>{getPreferenceLabel(item.preference)}</Text>
+          {/* Help type badge */}
+          <View style={styles.helpTypeBadge}>
+            <Lightbulb size={12} color={Colors.secondary[700]} />
+            <Text style={styles.helpTypeBadgeText}>
+              {getHelpTypeLabel(item.helpType)}
+            </Text>
           </View>
-          <View style={styles.srTag}>
-            <Users size={12} color={Colors.neutral[600]} />
-            <Text style={styles.srTagText}>Up to {item.groupSize}</Text>
-          </View>
-        </View>
 
-        {/* Availability */}
-        <View style={styles.srAvailRow}>
-          <Clock size={14} color={Colors.neutral[500]} />
-          <Text style={styles.srAvailText}>{item.availability}</Text>
-        </View>
+          {/* Topic */}
+          <Text style={styles.srTopic}>{item.topic}</Text>
 
-        {/* Footer */}
-        <View style={styles.srFooter}>
-          <Text style={styles.srInterestedCount}>
-            {item.interestedCount} interested
+          {/* Help needed */}
+          <Text style={styles.srHelp} numberOfLines={3}>
+            {item.helpNeeded}
           </Text>
-          <Pressable style={styles.srInterestedBtn}>
-            <Text style={styles.srInterestedBtnText}>I'm Interested</Text>
-          </Pressable>
+
+          {/* Tags row */}
+          <View style={styles.srTagsRow}>
+            <View style={styles.srTag}>
+              <Text style={styles.srTagText}>
+                {getPreferenceLabel(item.preference)}
+              </Text>
+            </View>
+            <View style={styles.srTag}>
+              <Users size={12} color={Colors.neutral[600]} />
+              <Text style={styles.srTagText}>Up to {item.groupSize}</Text>
+            </View>
+          </View>
+
+          {/* Availability */}
+          <View style={styles.srAvailRow}>
+            <Clock size={14} color={Colors.neutral[500]} />
+            <Text style={styles.srAvailText}>{item.availability}</Text>
+          </View>
+
+          {/* Footer */}
+          <View style={styles.srFooter}>
+            <Text style={styles.srInterestedCount}>
+              {item.interestedCount} interested
+            </Text>
+
+            {isOwnRequest ? (
+              <View style={styles.yourRequestLabel}>
+                <Text style={styles.yourRequestLabelText}>Your Request</Text>
+              </View>
+            ) : alreadyInterested ? (
+              <Pressable
+                style={styles.interestedActiveBtn}
+                onPress={() => handleToggleInterest(item.id, true)}
+              >
+                <Check size={14} color={Colors.primary[500]} />
+                <Text style={styles.interestedActiveBtnText}>Interested</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={styles.srInterestedBtn}
+                onPress={() => handleToggleInterest(item.id, false)}
+              >
+                <Text style={styles.srInterestedBtnText}>I'm Interested</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
-      </View>
-    ),
-    [isWide],
+      );
+    },
+    [isWide, currentUser.id, interestedIds, handleToggleInterest],
   );
 
   // ───────────────────────── loading ─────────────────────────
@@ -289,7 +373,6 @@ export default function CourseHubScreen() {
                   data={messages}
                   renderItem={renderMessage}
                   keyExtractor={(item) => item.id}
-                  inverted
                   contentContainerStyle={styles.chatList}
                   showsVerticalScrollIndicator={false}
                   ListEmptyComponent={
@@ -358,7 +441,9 @@ export default function CourseHubScreen() {
                 <SafeAreaView edges={['bottom']} style={styles.fabSafeArea}>
                   <Pressable
                     style={styles.fab}
-                    onPress={() => router.push('/study-request' as any)}
+                    onPress={() =>
+                      router.push(`/study-request?courseId=${id}` as any)
+                    }
                   >
                     <Plus size={20} color={Colors.neutral[0]} />
                     <Text style={styles.fabText}>New Request</Text>
@@ -704,6 +789,47 @@ const styles = StyleSheet.create({
     ...Typography.small,
     color: Colors.neutral[400],
   },
+
+  /* ── course code badge ── */
+  courseCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: Spacing.xs,
+    backgroundColor: Colors.primary[50],
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: Spacing.xs,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.primary[200],
+  },
+  courseCodeBadgeText: {
+    ...Typography.label,
+    color: Colors.primary[600],
+    letterSpacing: 0.3,
+  },
+
+  /* ── help type badge ── */
+  helpTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: Spacing.xs,
+    backgroundColor: Colors.secondary[50],
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: Spacing.xs,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.secondary[200],
+  },
+  helpTypeBadgeText: {
+    ...Typography.label,
+    color: Colors.secondary[700],
+    letterSpacing: 0.3,
+  },
+
   srTopic: {
     fontFamily: 'SourceSerifPro-Bold',
     fontSize: 17,
@@ -757,6 +883,8 @@ const styles = StyleSheet.create({
     ...Typography.captionMedium,
     color: Colors.neutral[500],
   },
+
+  /* ── interested button: filled (default) ── */
   srInterestedBtn: {
     backgroundColor: Colors.primary[500],
     borderRadius: BorderRadius.full,
@@ -766,6 +894,35 @@ const styles = StyleSheet.create({
   srInterestedBtnText: {
     ...Typography.captionMedium,
     color: Colors.neutral[0],
+  },
+
+  /* ── interested button: active (green outline) ── */
+  interestedActiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.primary[50],
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderWidth: 1.5,
+    borderColor: Colors.primary[500],
+  },
+  interestedActiveBtnText: {
+    ...Typography.captionMedium,
+    color: Colors.primary[500],
+  },
+
+  /* ── "Your Request" disabled label ── */
+  yourRequestLabel: {
+    backgroundColor: Colors.neutral[100],
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  yourRequestLabelText: {
+    ...Typography.captionMedium,
+    color: Colors.neutral[400],
   },
 
   /* ── FAB ── */

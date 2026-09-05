@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useDemoUser, DemoProfile } from '@/contexts/DemoUserContext';
+import { useDemoUser } from '@/contexts/DemoUserContext';
 import type {
   Course,
   StudyRequest,
+  HelpType,
   Message,
   PeerPod,
   PodMember,
@@ -27,10 +28,16 @@ function formatTime(dateStr: string): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-export function useCourses(): { data: Course[]; loading: boolean } {
+// ────────────────────────────────────────────────────────────
+// COURSES
+// ────────────────────────────────────────────────────────────
+
+export function useCourses(): { data: Course[]; loading: boolean; refetch: () => void } {
   const { currentUser } = useDemoUser();
   const [data, setData] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,18 +118,25 @@ export function useCourses(): { data: Course[]; loading: boolean } {
     })();
 
     return () => { cancelled = true; };
-  }, [currentUser.id]);
+  }, [currentUser.id, tick]);
 
-  return { data, loading };
+  return { data, loading, refetch };
 }
+
+// ────────────────────────────────────────────────────────────
+// STUDY REQUESTS
+// ────────────────────────────────────────────────────────────
 
 export function useStudyRequests(courseId?: string): {
   data: StudyRequest[];
   loading: boolean;
+  refetch: () => void;
 } {
   const { currentUser } = useDemoUser();
   const [data, setData] = useState<StudyRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,7 +145,7 @@ export function useStudyRequests(courseId?: string): {
     (async () => {
       let query = supabase
         .from('study_requests')
-        .select('*, profiles!study_requests_author_id_fkey(name, initials), courses!study_requests_course_id_fkey(code)')
+        .select('*, profiles!study_requests_author_id_fkey(id, name, initials), courses!study_requests_course_id_fkey(code)')
         .eq('is_posted_to_hub', true)
         .order('created_at', { ascending: false });
 
@@ -154,8 +168,10 @@ export function useStudyRequests(courseId?: string): {
             id: r.id,
             courseId: r.course_id,
             courseCode: course?.code ?? '',
+            authorId: author?.id ?? '',
             authorName: author?.name ?? 'Unknown',
             authorInitials: author?.initials ?? '?',
+            helpType: (r.help_type ?? 'understand-concept') as HelpType,
             helpNeeded: r.help_needed,
             topic: r.topic,
             availability: r.availability_text,
@@ -175,18 +191,149 @@ export function useStudyRequests(courseId?: string): {
     })();
 
     return () => { cancelled = true; };
-  }, [courseId, currentUser.id]);
+  }, [courseId, currentUser.id, tick]);
 
-  return { data, loading };
+  return { data, loading, refetch };
 }
+
+// ────────────────────────────────────────────────────────────
+// CREATE STUDY REQUEST
+// ────────────────────────────────────────────────────────────
+
+export function useCreateStudyRequest() {
+  const { currentUser } = useDemoUser();
+
+  return useCallback(
+    async (fields: {
+      courseId: string;
+      helpType: HelpType;
+      helpNeeded: string;
+      topic: string;
+      availability: string;
+      preference: string;
+      groupSize: number;
+      postToHub: boolean;
+    }) => {
+      const { data, error } = await supabase
+        .from('study_requests')
+        .insert({
+          course_id: fields.courseId,
+          author_id: currentUser.id,
+          help_type: fields.helpType,
+          help_needed: fields.helpNeeded,
+          topic: fields.topic,
+          availability_text: fields.availability,
+          preference: fields.preference,
+          group_size: fields.groupSize,
+          is_posted_to_hub: fields.postToHub,
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      if (fields.postToHub) {
+        const { data: channel } = await supabase
+          .from('channels')
+          .select('id')
+          .eq('course_id', fields.courseId)
+          .limit(1)
+          .maybeSingle();
+
+        if (channel) {
+          await supabase.from('messages').insert({
+            channel_id: channel.id,
+            author_id: currentUser.id,
+            body: fields.helpNeeded,
+            is_study_request: true,
+            study_request_id: data.id,
+          });
+        }
+      }
+
+      return data.id;
+    },
+    [currentUser.id],
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// MY INTERESTS (which study requests has the current user liked?)
+// ────────────────────────────────────────────────────────────
+
+export function useMyInterests(): {
+  interestedIds: Set<string>;
+  loading: boolean;
+  refetch: () => void;
+} {
+  const { currentUser } = useDemoUser();
+  const [interestedIds, setInterestedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const { data } = await supabase
+        .from('request_interests')
+        .select('request_id')
+        .eq('profile_id', currentUser.id);
+
+      if (cancelled) return;
+      setInterestedIds(new Set((data ?? []).map((r: any) => r.request_id)));
+      setLoading(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentUser.id, tick]);
+
+  return { interestedIds, loading, refetch };
+}
+
+// ────────────────────────────────────────────────────────────
+// TOGGLE INTEREST
+// ────────────────────────────────────────────────────────────
+
+export function useToggleInterest() {
+  const { currentUser } = useDemoUser();
+
+  return useCallback(
+    async (requestId: string, alreadyInterested: boolean) => {
+      if (alreadyInterested) {
+        await supabase
+          .from('request_interests')
+          .delete()
+          .eq('request_id', requestId)
+          .eq('profile_id', currentUser.id);
+      } else {
+        await supabase.from('request_interests').insert({
+          request_id: requestId,
+          profile_id: currentUser.id,
+        });
+      }
+    },
+    [currentUser.id],
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// COURSE MESSAGES
+// ────────────────────────────────────────────────────────────
 
 export function useCourseMessages(courseId: string): {
   data: Message[];
   loading: boolean;
+  refetch: () => void;
+  sendMessage: (text: string) => Promise<void>;
 } {
   const { currentUser } = useDemoUser();
   const [data, setData] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
+  const [channelId, setChannelId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -201,6 +348,7 @@ export function useCourseMessages(courseId: string): {
         .maybeSingle();
 
       if (cancelled || !channel) { setData([]); setLoading(false); return; }
+      setChannelId(channel.id);
 
       const { data: msgs } = await supabase
         .from('messages')
@@ -228,10 +376,28 @@ export function useCourseMessages(courseId: string): {
     })();
 
     return () => { cancelled = true; };
-  }, [courseId, currentUser.id]);
+  }, [courseId, currentUser.id, tick]);
 
-  return { data, loading };
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!channelId) return;
+      await supabase.from('messages').insert({
+        channel_id: channelId,
+        author_id: currentUser.id,
+        body: text,
+        is_study_request: false,
+      });
+      refetch();
+    },
+    [channelId, currentUser.id, refetch],
+  );
+
+  return { data, loading, refetch, sendMessage };
 }
+
+// ────────────────────────────────────────────────────────────
+// PODS
+// ────────────────────────────────────────────────────────────
 
 export function usePods(): { data: PeerPod[]; loading: boolean } {
   const { currentUser } = useDemoUser();
@@ -332,6 +498,10 @@ export function usePods(): { data: PeerPod[]; loading: boolean } {
   return { data, loading };
 }
 
+// ────────────────────────────────────────────────────────────
+// POD MESSAGES
+// ────────────────────────────────────────────────────────────
+
 export function usePodMessages(podId: string): {
   data: Message[];
   loading: boolean;
@@ -385,6 +555,10 @@ export function usePodMessages(podId: string): {
   return { data, loading };
 }
 
+// ────────────────────────────────────────────────────────────
+// POD TASKS
+// ────────────────────────────────────────────────────────────
+
 export function usePodTasks(podId: string): {
   data: { id: string; text: string; completed: boolean; assignee?: string }[];
   loading: boolean;
@@ -423,6 +597,10 @@ export function usePodTasks(podId: string): {
 
   return { data, loading };
 }
+
+// ────────────────────────────────────────────────────────────
+// SOLO TASKS
+// ────────────────────────────────────────────────────────────
 
 export function useSoloTasks(): {
   data: SoloTask[];
@@ -514,6 +692,10 @@ export function useSoloTasks(): {
 
   return { data, loading, addTask, toggleComplete, toggleStuck, deleteTask };
 }
+
+// ────────────────────────────────────────────────────────────
+// AVAILABILITY OVERLAP
+// ────────────────────────────────────────────────────────────
 
 export function useAvailabilityOverlap(otherUserId: string): {
   windows: string[];

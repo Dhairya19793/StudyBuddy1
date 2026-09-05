@@ -10,12 +10,29 @@ export interface Course {
   recentMessageTime?: string;
 }
 
+export type HelpType =
+  | 'work-through-problems'
+  | 'understand-concept'
+  | 'get-feedback'
+  | 'study-alongside'
+  | 'practice-quiz';
+
+export const HELP_TYPE_OPTIONS: { key: HelpType; label: string }[] = [
+  { key: 'work-through-problems', label: 'Work through problems' },
+  { key: 'understand-concept', label: 'Understand a concept' },
+  { key: 'get-feedback', label: 'Get feedback' },
+  { key: 'study-alongside', label: 'Study alongside someone' },
+  { key: 'practice-quiz', label: 'Practice or quiz each other' },
+];
+
 export interface StudyRequest {
   id: string;
   courseId: string;
   courseCode: string;
+  authorId: string;
   authorName: string;
   authorInitials: string;
+  helpType: HelpType;
   helpNeeded: string;
   topic: string;
   availability: string;
@@ -150,8 +167,10 @@ export const STUDY_REQUESTS: StudyRequest[] = [
     id: 'sr1',
     courseId: 'c1',
     courseCode: 'CSC 202',
+    authorId: 'u2',
     authorName: 'Jordan Kim',
     authorInitials: 'JK',
+    helpType: 'work-through-problems',
     helpNeeded: 'I can implement a basic BST but I keep getting confused on rotations for AVL trees. Need someone to walk through it step by step.',
     topic: 'AVL Tree Rotations',
     availability: 'Today after 4pm or tomorrow morning',
@@ -165,8 +184,10 @@ export const STUDY_REQUESTS: StudyRequest[] = [
     id: 'sr2',
     courseId: 'c1',
     courseCode: 'CSC 202',
+    authorId: 'u3',
     authorName: 'Mia Nguyen',
     authorInitials: 'MN',
+    helpType: 'understand-concept',
     helpNeeded: 'Struggling with time complexity analysis for recursive algorithms. The recurrence relations just don\'t click for me yet.',
     topic: 'Recursion & Time Complexity',
     availability: 'Flexible this week',
@@ -180,8 +201,10 @@ export const STUDY_REQUESTS: StudyRequest[] = [
     id: 'sr3',
     courseId: 'c2',
     courseCode: 'CSC 357',
+    authorId: 'u4',
     authorName: 'Tomas Rivera',
     authorInitials: 'TR',
+    helpType: 'work-through-problems',
     helpNeeded: 'The fork/exec/pipe lab is due Friday and I\'m stuck on connecting multiple processes. Would love to debug together.',
     topic: 'Unix Pipes & Processes',
     availability: 'Wed or Thu evening',
@@ -195,8 +218,10 @@ export const STUDY_REQUESTS: StudyRequest[] = [
     id: 'sr4',
     courseId: 'c3',
     courseCode: 'MATH 244',
+    authorId: 'u5',
     authorName: 'Priya Patel',
     authorInitials: 'PP',
+    helpType: 'understand-concept',
     helpNeeded: 'I understand matrix multiplication but eigenvalue decomposition is a wall. Need a different explanation than the textbook.',
     topic: 'Eigenvalue Decomposition',
     availability: 'Any afternoon this week',
@@ -210,8 +235,10 @@ export const STUDY_REQUESTS: StudyRequest[] = [
     id: 'sr5',
     courseId: 'c1',
     courseCode: 'CSC 202',
+    authorId: 'u1',
     authorName: 'Alex Chen',
     authorInitials: 'AC',
+    helpType: 'work-through-problems',
     helpNeeded: 'Hash table collision resolution - I get chaining but open addressing schemes (linear probing, quadratic, double hashing) confuse me.',
     topic: 'Hash Table Collision Resolution',
     availability: 'Tomorrow afternoon',
@@ -225,8 +252,10 @@ export const STUDY_REQUESTS: StudyRequest[] = [
     id: 'sr6',
     courseId: 'c3',
     courseCode: 'MATH 244',
+    authorId: 'u6',
     authorName: 'Leo Martinez',
     authorInitials: 'LM',
+    helpType: 'practice-quiz',
     helpNeeded: 'Practice session for the midterm covering vector spaces and linear transformations.',
     topic: 'Midterm Review: Vector Spaces',
     availability: 'This weekend',
