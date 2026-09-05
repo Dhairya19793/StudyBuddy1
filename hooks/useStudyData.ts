@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useDemoUser } from '@/contexts/DemoUserContext';
 import type {
@@ -399,10 +399,12 @@ export function useCourseMessages(courseId: string): {
 // PODS
 // ────────────────────────────────────────────────────────────
 
-export function usePods(): { data: PeerPod[]; loading: boolean } {
+export function usePods(): { data: PeerPod[]; loading: boolean; refetch: () => void } {
   const { currentUser } = useDemoUser();
   const [data, setData] = useState<PeerPod[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -493,41 +495,50 @@ export function usePods(): { data: PeerPod[]; loading: boolean } {
     })();
 
     return () => { cancelled = true; };
-  }, [currentUser.id]);
+  }, [currentUser.id, tick]);
 
-  return { data, loading };
+  return { data, loading, refetch };
 }
 
 // ────────────────────────────────────────────────────────────
-// POD MESSAGES
+// POD MESSAGES  (with sendMessage + Realtime)
 // ────────────────────────────────────────────────────────────
 
 export function usePodMessages(podId: string): {
   data: Message[];
   loading: boolean;
+  refetch: () => void;
+  sendMessage: (text: string) => Promise<void>;
 } {
   const { currentUser } = useDemoUser();
   const [data, setData] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
+  const channelIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
     setLoading(true);
 
     (async () => {
-      const { data: channel } = await supabase
+      // 1. Look up the pod's channel
+      const { data: ch } = await supabase
         .from('channels')
         .select('id')
         .eq('pod_id', podId)
         .limit(1)
         .maybeSingle();
 
-      if (cancelled || !channel) { setData([]); setLoading(false); return; }
+      if (cancelled || !ch) { setData([]); setLoading(false); return; }
+      channelIdRef.current = ch.id;
 
+      // 2. Fetch existing messages
       const { data: msgs } = await supabase
         .from('messages')
         .select('*, profiles!messages_author_id_fkey(name, initials)')
-        .eq('channel_id', channel.id)
+        .eq('channel_id', ch.id)
         .order('created_at', { ascending: true });
 
       if (cancelled || !msgs) return;
@@ -547,27 +558,99 @@ export function usePodMessages(podId: string): {
         setData(enriched);
         setLoading(false);
       }
+
+      // 3. Subscribe to realtime INSERT events on this channel's messages
+      if (!cancelled) {
+        realtimeChannel = supabase
+          .channel(`pod-messages-${podId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'messages',
+              filter: `channel_id=eq.${ch.id}`,
+            },
+            async (payload) => {
+              const newRow = payload.new as any;
+
+              // Fetch the profile join for the new message
+              const { data: msgWithProfile } = await supabase
+                .from('messages')
+                .select('*, profiles!messages_author_id_fkey(name, initials)')
+                .eq('id', newRow.id)
+                .single();
+
+              if (!msgWithProfile) return;
+
+              const newMessage: Message = {
+                id: msgWithProfile.id,
+                authorName: msgWithProfile.profiles?.name ?? 'Unknown',
+                authorInitials: msgWithProfile.profiles?.initials ?? '?',
+                text: msgWithProfile.body,
+                timestamp: formatTime(msgWithProfile.created_at),
+                isStudyRequest: msgWithProfile.is_study_request,
+                studyRequestId: msgWithProfile.study_request_id,
+                isOwn: msgWithProfile.author_id === currentUser.id,
+              };
+
+              setData((prev) => {
+                // Avoid duplicates
+                if (prev.some((m) => m.id === newMessage.id)) return prev;
+                return [...prev, newMessage];
+              });
+            },
+          )
+          .subscribe();
+      }
     })();
 
-    return () => { cancelled = true; };
-  }, [podId, currentUser.id]);
+    return () => {
+      cancelled = true;
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+      }
+    };
+  }, [podId, currentUser.id, tick]);
 
-  return { data, loading };
+  const sendMessage = useCallback(
+    async (text: string) => {
+      const chId = channelIdRef.current;
+      if (!chId) return;
+      await supabase.from('messages').insert({
+        channel_id: chId,
+        author_id: currentUser.id,
+        body: text,
+        is_study_request: false,
+      });
+      // No refetch needed – realtime subscription will handle it
+    },
+    [currentUser.id],
+  );
+
+  return { data, loading, refetch, sendMessage };
 }
 
 // ────────────────────────────────────────────────────────────
-// POD TASKS
+// POD TASKS  (with addTask, toggleTask + Realtime)
 // ────────────────────────────────────────────────────────────
 
 export function usePodTasks(podId: string): {
   data: { id: string; text: string; completed: boolean; assignee?: string }[];
   loading: boolean;
+  refetch: () => void;
+  addTask: (text: string) => Promise<void>;
+  toggleTask: (taskId: string) => Promise<void>;
 } {
+  const { currentUser } = useDemoUser();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     let cancelled = false;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
     setLoading(true);
 
     (async () => {
@@ -590,12 +673,114 @@ export function usePodTasks(podId: string): {
         setData(enriched);
         setLoading(false);
       }
+
+      // Subscribe to realtime INSERT and UPDATE events on tasks for this pod
+      if (!cancelled) {
+        realtimeChannel = supabase
+          .channel(`pod-tasks-${podId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'tasks',
+              filter: `pod_id=eq.${podId}`,
+            },
+            async (payload) => {
+              const newRow = payload.new as any;
+
+              // Fetch with profile join
+              const { data: taskWithProfile } = await supabase
+                .from('tasks')
+                .select('*, profiles!tasks_assignee_id_fkey(name)')
+                .eq('id', newRow.id)
+                .single();
+
+              if (!taskWithProfile) return;
+
+              const newTask = {
+                id: taskWithProfile.id,
+                text: taskWithProfile.text,
+                completed: taskWithProfile.completed,
+                assignee: taskWithProfile.profiles?.name?.split(' ')[0],
+              };
+
+              setData((prev) => {
+                if (prev.some((t: any) => t.id === newTask.id)) return prev;
+                return [...prev, newTask];
+              });
+            },
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'tasks',
+              filter: `pod_id=eq.${podId}`,
+            },
+            async (payload) => {
+              const updatedRow = payload.new as any;
+
+              // Fetch with profile join
+              const { data: taskWithProfile } = await supabase
+                .from('tasks')
+                .select('*, profiles!tasks_assignee_id_fkey(name)')
+                .eq('id', updatedRow.id)
+                .single();
+
+              if (!taskWithProfile) return;
+
+              const updatedTask = {
+                id: taskWithProfile.id,
+                text: taskWithProfile.text,
+                completed: taskWithProfile.completed,
+                assignee: taskWithProfile.profiles?.name?.split(' ')[0],
+              };
+
+              setData((prev) =>
+                prev.map((t: any) => (t.id === updatedTask.id ? updatedTask : t)),
+              );
+            },
+          )
+          .subscribe();
+      }
     })();
 
-    return () => { cancelled = true; };
-  }, [podId]);
+    return () => {
+      cancelled = true;
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+      }
+    };
+  }, [podId, tick]);
 
-  return { data, loading };
+  const addTask = useCallback(
+    async (text: string) => {
+      await supabase.from('tasks').insert({
+        pod_id: podId,
+        text,
+        completed: false,
+      });
+      // Realtime will handle appending
+    },
+    [podId],
+  );
+
+  const toggleTask = useCallback(
+    async (taskId: string) => {
+      const task = data.find((t: any) => t.id === taskId);
+      if (!task) return;
+      await supabase
+        .from('tasks')
+        .update({ completed: !task.completed })
+        .eq('id', taskId);
+      // Realtime will handle updating
+    },
+    [data],
+  );
+
+  return { data, loading, refetch, addTask, toggleTask };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -754,4 +939,131 @@ export function useAvailabilityOverlap(otherUserId: string): {
   }, [currentUser.id, otherUserId]);
 
   return { windows, loading };
+}
+
+// ────────────────────────────────────────────────────────────
+// CREATE POD
+// ────────────────────────────────────────────────────────────
+
+export function useCreatePod() {
+  const { currentUser } = useDemoUser();
+
+  return useCallback(
+    async (fields: {
+      name: string;
+      courseId: string;
+      topic: string;
+      memberIds: string[]; // includes creator
+    }) => {
+      // 1. Insert the pod
+      const { data: pod, error } = await supabase
+        .from('pods')
+        .insert({
+          name: fields.name,
+          course_id: fields.courseId,
+          topic: fields.topic,
+        })
+        .select('id')
+        .single();
+
+      if (error || !pod) throw error ?? new Error('Failed to create pod');
+
+      // 2. Insert pod_members for each memberId
+      const memberRows = fields.memberIds.map((id) => ({
+        pod_id: pod.id,
+        profile_id: id,
+      }));
+      await supabase.from('pod_members').insert(memberRows);
+
+      // 3. Create a private channel for the pod
+      await supabase.from('channels').insert({
+        pod_id: pod.id,
+        name: 'general',
+      });
+
+      return pod.id;
+    },
+    [currentUser.id],
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// REQUEST INTEREST USERS
+// ────────────────────────────────────────────────────────────
+
+export function useRequestInterestUsers(requestId: string): {
+  data: { id: string; name: string; initials: string }[];
+  loading: boolean;
+  refetch: () => void;
+} {
+  const [data, setData] = useState<{ id: string; name: string; initials: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      const { data: interests } = await supabase
+        .from('request_interests')
+        .select('profiles!request_interests_profile_id_fkey(id, name, initials)')
+        .eq('request_id', requestId);
+
+      if (cancelled) return;
+
+      const users = (interests ?? []).map((row: any) => ({
+        id: row.profiles?.id ?? '',
+        name: row.profiles?.name ?? 'Unknown',
+        initials: row.profiles?.initials ?? '?',
+      }));
+
+      if (!cancelled) {
+        setData(users);
+        setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [requestId, tick]);
+
+  return { data, loading, refetch };
+}
+
+// ────────────────────────────────────────────────────────────
+// SAVE AVAILABILITY BLOCKS
+// ────────────────────────────────────────────────────────────
+
+export function useSaveAvailabilityBlocks() {
+  const { currentUser } = useDemoUser();
+
+  return useCallback(
+    async (
+      blocks: { day: string; startTime: string; endTime: string }[],
+      studyRequestId?: string,
+    ) => {
+      // Delete existing blocks for this user + study_request_id combo
+      if (studyRequestId) {
+        await supabase
+          .from('availability_blocks')
+          .delete()
+          .eq('profile_id', currentUser.id)
+          .eq('study_request_id', studyRequestId);
+      }
+
+      if (blocks.length === 0) return;
+
+      const rows = blocks.map((b) => ({
+        profile_id: currentUser.id,
+        day_of_week: b.day,
+        start_time: b.startTime,
+        end_time: b.endTime,
+        study_request_id: studyRequestId ?? null,
+      }));
+
+      await supabase.from('availability_blocks').insert(rows);
+    },
+    [currentUser.id],
+  );
 }

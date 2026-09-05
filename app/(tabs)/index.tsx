@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   BookOpen,
   Users,
@@ -42,8 +42,15 @@ export default function HomeScreen() {
   const isWide = width > 768;
 
   const { currentUser } = useDemoUser();
-  const { data: courses, loading: coursesLoading } = useCourses();
-  const { data: studyRequests } = useStudyRequests();
+  const { data: courses, loading: coursesLoading, refetch: refetchCourses } = useCourses();
+  const { data: studyRequests, refetch: refetchRequests } = useStudyRequests();
+
+  useFocusEffect(
+    useCallback(() => {
+      refetchCourses();
+      refetchRequests();
+    }, [refetchCourses, refetchRequests]),
+  );
   const { data: pods } = usePods();
   const { data: soloTasks } = useSoloTasks();
 

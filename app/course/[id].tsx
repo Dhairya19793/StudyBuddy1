@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,11 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import {
   ArrowLeft,
   Send,
@@ -33,6 +35,8 @@ import {
   useStudyRequests,
   useMyInterests,
   useToggleInterest,
+  useRequestInterestUsers,
+  useCreatePod,
 } from '@/hooks/useStudyData';
 import { useDemoUser } from '@/contexts/DemoUserContext';
 
@@ -47,6 +51,9 @@ export default function CourseHubScreen() {
 
   const [activeTab, setActiveTab] = useState<Tab>('chat');
   const [messageText, setMessageText] = useState('');
+  const [podCreatingForId, setPodCreatingForId] = useState<string | null>(null);
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+  const [creatingPod, setCreatingPod] = useState(false);
 
   const isWide = width > 768;
 
@@ -73,6 +80,16 @@ export default function CourseHubScreen() {
     refetch: refetchInterests,
   } = useMyInterests();
   const toggleInterest = useToggleInterest();
+  const createPod = useCreatePod();
+
+  // refetch study requests + messages when screen regains focus
+  useFocusEffect(
+    useCallback(() => {
+      refetchRequests();
+      refetchMessages();
+      refetchInterests();
+    }, [refetchRequests, refetchMessages, refetchInterests]),
+  );
 
   // ───────────────────────── handlers ─────────────────────────
 
@@ -92,6 +109,32 @@ export default function CourseHubScreen() {
     },
     [toggleInterest, refetchInterests, refetchRequests],
   );
+
+  const podRequest = useMemo(
+    () => courseRequests.find((r) => r.id === podCreatingForId) ?? null,
+    [courseRequests, podCreatingForId],
+  );
+
+  const handleCreatePod = useCallback(async () => {
+    if (!podRequest || !course || selectedMembers.size === 0) return;
+    setCreatingPod(true);
+    try {
+      const memberIds = [currentUser.id, ...Array.from(selectedMembers)];
+      const podName = `${course.code} \u2014 ${podRequest.topic} Pod`;
+      await createPod({
+        name: podName,
+        courseId: course.id,
+        topic: podRequest.topic,
+        memberIds,
+      });
+      setPodCreatingForId(null);
+      router.push('/pods' as any);
+    } catch (err) {
+      console.error('Failed to create pod:', err);
+    } finally {
+      setCreatingPod(false);
+    }
+  }, [podRequest, course, selectedMembers, currentUser.id, createPod, router]);
 
   // ───────────────────────── helpers ─────────────────────────
 
@@ -240,7 +283,18 @@ export default function CourseHubScreen() {
               {item.interestedCount} interested
             </Text>
 
-            {isOwnRequest ? (
+            {isOwnRequest && item.interestedCount >= 2 ? (
+              <Pressable
+                style={styles.createPodBtn}
+                onPress={() => {
+                  setPodCreatingForId(item.id);
+                  setSelectedMembers(new Set());
+                }}
+              >
+                <Users size={14} color={Colors.neutral[0]} />
+                <Text style={styles.createPodBtnText}>Create Peer Pod</Text>
+              </Pressable>
+            ) : isOwnRequest ? (
               <View style={styles.yourRequestLabel}>
                 <Text style={styles.yourRequestLabelText}>Your Request</Text>
               </View>
@@ -454,7 +508,103 @@ export default function CourseHubScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Create Peer Pod Modal */}
+      <Modal
+        visible={podCreatingForId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPodCreatingForId(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, isWide && { maxWidth: 480 }]}>
+            <Text style={styles.modalTitle}>Create Peer Pod</Text>
+            {podRequest && (
+              <Text style={styles.modalSubtitle}>
+                Select students to invite from those who expressed interest in "{podRequest.topic}"
+              </Text>
+            )}
+            <PodMemberSelector
+              requestId={podCreatingForId ?? ''}
+              currentUserId={currentUser.id}
+              selectedMembers={selectedMembers}
+              onToggle={(uid) => {
+                setSelectedMembers((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(uid)) next.delete(uid);
+                  else next.add(uid);
+                  return next;
+                });
+              }}
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => setPodCreatingForId(null)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalCreateBtn, selectedMembers.size === 0 && styles.modalCreateBtnDisabled]}
+                onPress={handleCreatePod}
+                disabled={selectedMembers.size === 0 || creatingPod}
+              >
+                {creatingPod ? (
+                  <ActivityIndicator size="small" color={Colors.neutral[0]} />
+                ) : (
+                  <Text style={styles.modalCreateText}>Create Pod</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+function PodMemberSelector({
+  requestId,
+  currentUserId,
+  selectedMembers,
+  onToggle,
+}: {
+  requestId: string;
+  currentUserId: string;
+  selectedMembers: Set<string>;
+  onToggle: (uid: string) => void;
+}) {
+  const { data: users, loading } = useRequestInterestUsers(requestId);
+
+  if (loading) {
+    return <ActivityIndicator style={{ padding: Spacing.md }} color={Colors.primary[500]} />;
+  }
+
+  const filteredUsers = users.filter((u) => u.id !== currentUserId);
+
+  if (filteredUsers.length === 0) {
+    return <Text style={styles.modalEmpty}>No interested students found.</Text>;
+  }
+
+  return (
+    <ScrollView style={{ maxHeight: 240 }}>
+      {filteredUsers.map((user) => {
+        const selected = selectedMembers.has(user.id);
+        return (
+          <Pressable
+            key={user.id}
+            style={[styles.memberSelectRow, selected && styles.memberSelectRowActive]}
+            onPress={() => onToggle(user.id)}
+          >
+            <View style={[styles.memberSelectAvatar, selected && { backgroundColor: Colors.primary[500] }]}>
+              <Text style={styles.memberSelectInitials}>{user.initials}</Text>
+            </View>
+            <Text style={[styles.memberSelectName, selected && { color: Colors.primary[700] }]}>{user.name}</Text>
+            {selected && <Check size={18} color={Colors.primary[500]} />}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -948,5 +1098,116 @@ const styles = StyleSheet.create({
   fabText: {
     ...Typography.bodySemiBold,
     color: Colors.neutral[0],
+  },
+
+  /* ── Create Pod button ── */
+  createPodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary[500],
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  createPodBtnText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: Colors.neutral[0],
+  },
+
+  /* ── Modal ── */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    width: '100%',
+    maxWidth: 400,
+    ...Shadows.lg,
+  },
+  modalTitle: {
+    fontFamily: 'SourceSerifPro-Bold',
+    fontSize: 20,
+    color: Colors.neutral[900],
+    marginBottom: Spacing.xs,
+  },
+  modalSubtitle: {
+    ...Typography.caption,
+    color: Colors.neutral[500],
+    marginBottom: Spacing.md,
+  },
+  modalEmpty: {
+    ...Typography.body,
+    color: Colors.neutral[500],
+    textAlign: 'center',
+    paddingVertical: Spacing.lg,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.lg,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.sm + 4,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.neutral[300],
+  },
+  modalCancelText: {
+    ...Typography.bodySemiBold,
+    color: Colors.neutral[600],
+  },
+  modalCreateBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.sm + 4,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.primary[500],
+  },
+  modalCreateBtnDisabled: {
+    backgroundColor: Colors.neutral[300],
+  },
+  modalCreateText: {
+    ...Typography.bodySemiBold,
+    color: Colors.neutral[0],
+  },
+  memberSelectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  memberSelectRowActive: {
+    backgroundColor: Colors.primary[50],
+  },
+  memberSelectAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.neutral[300],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  memberSelectInitials: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: Colors.neutral[0],
+  },
+  memberSelectName: {
+    flex: 1,
+    ...Typography.bodyMedium,
+    color: Colors.neutral[900],
   },
 });

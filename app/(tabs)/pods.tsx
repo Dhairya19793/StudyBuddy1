@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   Users,
   MessageSquare,
@@ -46,7 +46,11 @@ function avatarColor(index: number) {
 export default function PodsScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { data: pods, loading } = usePods();
+  const { data: pods, loading, refetch: refetchPods } = usePods();
+
+  useFocusEffect(
+    useCallback(() => { refetchPods(); }, [refetchPods]),
+  );
 
   const isWideScreen = width > 768;
   const numColumns = isWideScreen ? 2 : 1;

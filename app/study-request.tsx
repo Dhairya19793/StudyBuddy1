@@ -17,7 +17,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   X,
   Send,
-  Clock,
   MessageSquare,
   Video,
   MapPin,
@@ -29,7 +28,9 @@ import {
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import { HELP_TYPE_OPTIONS } from '@/constants/mockData';
 import type { HelpType } from '@/constants/mockData';
-import { useCourses, useCreateStudyRequest } from '@/hooks/useStudyData';
+import { useCourses, useCreateStudyRequest, useSaveAvailabilityBlocks } from '@/hooks/useStudyData';
+import AvailabilityPicker, { getAvailabilitySummary, isMinimumAvailability } from '@/components/AvailabilityPicker';
+import type { AvailabilityBlock } from '@/components/AvailabilityPicker';
 
 const COLLAB_ICONS: Record<string, React.ElementType> = {
   'text-only': MessageSquare,
@@ -56,12 +57,14 @@ export default function StudyRequestScreen() {
   const { width } = useWindowDimensions();
   const { data: courses } = useCourses();
   const createStudyRequest = useCreateStudyRequest();
+  const saveAvailabilityBlocks = useSaveAvailabilityBlocks();
 
   // Form state
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(courseId ?? null);
   const [selectedHelpType, setSelectedHelpType] = useState<HelpType | null>(null);
   const [topic, setTopic] = useState('');
-  const [availability, setAvailability] = useState('');
+  const [availabilityBlocks, setAvailabilityBlocks] = useState<AvailabilityBlock[]>([]);
+  const [isFlexible, setIsFlexible] = useState(false);
   const [selectedPreference, setSelectedPreference] = useState<string | null>(null);
   const [groupSize, setGroupSize] = useState<number | null>(null);
   const [postToHub, setPostToHub] = useState(true);
@@ -74,28 +77,39 @@ export default function StudyRequestScreen() {
   const isFormValid =
     selectedCourseId !== null &&
     selectedHelpType !== null &&
-    topic.trim().length > 0;
+    topic.trim().length > 0 &&
+    isMinimumAvailability(availabilityBlocks, isFlexible);
 
   const handleSubmit = async () => {
     if (!isFormValid || isSubmitting) return;
 
-    // Build helpNeeded from the selected help type label
     const helpTypeLabel =
       HELP_TYPE_OPTIONS.find((opt) => opt.key === selectedHelpType)?.label ?? '';
+    const availSummary = isFlexible
+      ? 'Flexible schedule'
+      : getAvailabilitySummary(availabilityBlocks);
 
     setIsSubmitting(true);
 
     try {
-      await createStudyRequest({
+      const requestId = await createStudyRequest({
         courseId: selectedCourseId!,
         helpType: selectedHelpType!,
         helpNeeded: helpTypeLabel,
         topic: topic.trim(),
-        availability: availability.trim(),
+        availability: availSummary,
         preference: selectedPreference ?? 'flexible',
         groupSize: groupSize ?? 2,
         postToHub,
       });
+
+      // Save availability blocks linked to this study request
+      if (!isFlexible && availabilityBlocks.length > 0) {
+        await saveAvailabilityBlocks(
+          availabilityBlocks.map((b) => ({ day: b.day, startTime: b.startTime, endTime: b.endTime })),
+          requestId,
+        );
+      }
 
       setIsSubmitted(true);
 
@@ -267,22 +281,15 @@ export default function StudyRequestScreen() {
             />
           </View>
 
-          {/* ── Availability ── */}
+          {/* ── Availability Picker ── */}
           <View style={styles.section}>
             <Text style={styles.label}>WHEN ARE YOU AVAILABLE?</Text>
-            <View style={styles.inputWithIcon}>
-              <Clock size={18} color={Colors.neutral[400]} />
-              <TextInput
-                style={[
-                  styles.inputWithIconText,
-                  Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {},
-                ]}
-                placeholder="e.g., Today after 4pm, flexible this week"
-                placeholderTextColor={Colors.neutral[400]}
-                value={availability}
-                onChangeText={setAvailability}
-              />
-            </View>
+            <AvailabilityPicker
+              selectedBlocks={availabilityBlocks}
+              onBlocksChange={setAvailabilityBlocks}
+              isFlexible={isFlexible}
+              onFlexibleChange={setIsFlexible}
+            />
           </View>
 
           {/* ── Collaboration Preference ── */}
