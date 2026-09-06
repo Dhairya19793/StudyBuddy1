@@ -53,16 +53,21 @@ const GROUP_SIZE_OPTIONS = [
 
 export default function StudyRequestScreen() {
   const router = useRouter();
-  const { courseId } = useLocalSearchParams<{ courseId?: string }>();
+  const { courseId, prefillCourseId, prefillTopic, prefillGoal } = useLocalSearchParams<{
+    courseId?: string;
+    prefillCourseId?: string;
+    prefillTopic?: string;
+    prefillGoal?: string;
+  }>();
   const { width } = useWindowDimensions();
   const { data: courses } = useCourses();
   const createStudyRequest = useCreateStudyRequest();
   const saveAvailabilityBlocks = useSaveAvailabilityBlocks();
 
   // Form state
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(courseId ?? null);
-  const [selectedHelpType, setSelectedHelpType] = useState<HelpType | null>(null);
-  const [topic, setTopic] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(prefillCourseId ?? courseId ?? null);
+  const [selectedHelpType, setSelectedHelpType] = useState<HelpType | null>(prefillTopic ? 'understand-concept' : null);
+  const [topic, setTopic] = useState(prefillTopic ? `${prefillTopic}${prefillGoal ? ` (from: ${prefillGoal})` : ''}` : '');
   const [availabilityBlocks, setAvailabilityBlocks] = useState<AvailabilityBlock[]>([]);
   const [isFlexible, setIsFlexible] = useState(false);
   const [selectedPreference, setSelectedPreference] = useState<string | null>(null);

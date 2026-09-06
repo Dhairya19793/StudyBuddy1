@@ -9,6 +9,7 @@ import type {
   PeerPod,
   PodMember,
   SoloTask,
+  StudyPlan,
 } from '@/constants/mockData';
 
 function timeAgo(dateStr: string): string {
@@ -508,7 +509,9 @@ export function usePodMessages(podId: string): {
   data: Message[];
   loading: boolean;
   refetch: () => void;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string, opts?: { label?: string; imageUri?: string; imageName?: string; imageMimeType?: string }) => Promise<void>;
+  togglePin: (messageId: string, currentlyPinned: boolean) => Promise<void>;
+  markResolved: (messageId: string) => Promise<void>;
 } {
   const { currentUser } = useDemoUser();
   const [data, setData] = useState<Message[]>([]);
@@ -517,13 +520,31 @@ export function usePodMessages(podId: string): {
   const refetch = useCallback(() => setTick((t) => t + 1), []);
   const channelIdRef = useRef<string | null>(null);
 
+  const enrichRow = useCallback(
+    (m: any, attachment?: any): Message => ({
+      id: m.id,
+      authorName: m.profiles?.name ?? 'Unknown',
+      authorInitials: m.profiles?.initials ?? '?',
+      text: m.body,
+      timestamp: formatTime(m.created_at),
+      isStudyRequest: m.is_study_request,
+      studyRequestId: m.study_request_id,
+      isOwn: m.author_id === currentUser.id,
+      label: m.label ?? null,
+      isPinned: m.is_pinned ?? false,
+      isResolved: m.is_resolved ?? false,
+      imageUrl: attachment?.url ?? null,
+      imageName: attachment?.filename ?? null,
+    }),
+    [currentUser.id],
+  );
+
   useEffect(() => {
     let cancelled = false;
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
     setLoading(true);
 
     (async () => {
-      // 1. Look up the pod's channel
       const { data: ch } = await supabase
         .from('channels')
         .select('id')
@@ -534,71 +555,55 @@ export function usePodMessages(podId: string): {
       if (cancelled || !ch) { setData([]); setLoading(false); return; }
       channelIdRef.current = ch.id;
 
-      // 2. Fetch existing messages
       const { data: msgs } = await supabase
         .from('messages')
-        .select('*, profiles!messages_author_id_fkey(name, initials)')
+        .select('*, profiles!messages_author_id_fkey(name, initials), attachments(*)')
         .eq('channel_id', ch.id)
         .order('created_at', { ascending: true });
 
       if (cancelled || !msgs) return;
 
-      const enriched: Message[] = msgs.map((m: any) => ({
-        id: m.id,
-        authorName: m.profiles?.name ?? 'Unknown',
-        authorInitials: m.profiles?.initials ?? '?',
-        text: m.body,
-        timestamp: formatTime(m.created_at),
-        isStudyRequest: m.is_study_request,
-        studyRequestId: m.study_request_id,
-        isOwn: m.author_id === currentUser.id,
-      }));
+      const enriched: Message[] = msgs.map((m: any) => {
+        const att = m.attachments?.[0] ?? null;
+        return enrichRow(m, att);
+      });
 
       if (!cancelled) {
         setData(enriched);
         setLoading(false);
       }
 
-      // 3. Subscribe to realtime INSERT events on this channel's messages
       if (!cancelled) {
         realtimeChannel = supabase
           .channel(`pod-messages-${podId}`)
           .on(
             'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'messages',
-              filter: `channel_id=eq.${ch.id}`,
-            },
+            { event: 'INSERT', schema: 'public', table: 'messages', filter: `channel_id=eq.${ch.id}` },
             async (payload) => {
               const newRow = payload.new as any;
-
-              // Fetch the profile join for the new message
-              const { data: msgWithProfile } = await supabase
+              const { data: msgFull } = await supabase
                 .from('messages')
-                .select('*, profiles!messages_author_id_fkey(name, initials)')
+                .select('*, profiles!messages_author_id_fkey(name, initials), attachments(*)')
                 .eq('id', newRow.id)
                 .single();
-
-              if (!msgWithProfile) return;
-
-              const newMessage: Message = {
-                id: msgWithProfile.id,
-                authorName: msgWithProfile.profiles?.name ?? 'Unknown',
-                authorInitials: msgWithProfile.profiles?.initials ?? '?',
-                text: msgWithProfile.body,
-                timestamp: formatTime(msgWithProfile.created_at),
-                isStudyRequest: msgWithProfile.is_study_request,
-                studyRequestId: msgWithProfile.study_request_id,
-                isOwn: msgWithProfile.author_id === currentUser.id,
-              };
-
-              setData((prev) => {
-                // Avoid duplicates
-                if (prev.some((m) => m.id === newMessage.id)) return prev;
-                return [...prev, newMessage];
-              });
+              if (!msgFull) return;
+              const att = (msgFull as any).attachments?.[0] ?? null;
+              const newMessage = enrichRow(msgFull, att);
+              setData((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
+            },
+          )
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'messages', filter: `channel_id=eq.${ch.id}` },
+            async (payload) => {
+              const updatedRow = payload.new as any;
+              setData((prev) =>
+                prev.map((m) =>
+                  m.id === updatedRow.id
+                    ? { ...m, isPinned: updatedRow.is_pinned, isResolved: updatedRow.is_resolved, label: updatedRow.label }
+                    : m,
+                ),
+              );
             },
           )
           .subscribe();
@@ -607,28 +612,81 @@ export function usePodMessages(podId: string): {
 
     return () => {
       cancelled = true;
-      if (realtimeChannel) {
-        supabase.removeChannel(realtimeChannel);
-      }
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel);
     };
-  }, [podId, currentUser.id, tick]);
+  }, [podId, currentUser.id, tick, enrichRow]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { label?: string; imageUri?: string; imageName?: string; imageMimeType?: string }) => {
       const chId = channelIdRef.current;
       if (!chId) return;
-      await supabase.from('messages').insert({
-        channel_id: chId,
-        author_id: currentUser.id,
-        body: text,
-        is_study_request: false,
-      });
-      // No refetch needed – realtime subscription will handle it
+
+      let attachmentUrl: string | null = null;
+      let attachmentFilename: string | null = null;
+      let attachmentMime = 'image/png';
+
+      if (opts?.imageUri) {
+        const fileName = `${podId}/${Date.now()}-${opts.imageName ?? 'image.png'}`;
+        attachmentMime = opts.imageMimeType ?? 'image/png';
+
+        const response = await fetch(opts.imageUri);
+        const blob = await response.blob();
+
+        const { error: uploadError } = await supabase.storage
+          .from('pod-images')
+          .upload(fileName, blob, { contentType: attachmentMime, upsert: false });
+
+        if (uploadError) {
+          console.error('Upload failed:', uploadError.message);
+          throw new Error('Image upload failed');
+        }
+
+        const { data: urlData } = supabase.storage.from('pod-images').getPublicUrl(fileName);
+        attachmentUrl = urlData.publicUrl;
+        attachmentFilename = opts.imageName ?? 'image.png';
+      }
+
+      const { data: msgRow, error } = await supabase
+        .from('messages')
+        .insert({
+          channel_id: chId,
+          author_id: currentUser.id,
+          body: text || (attachmentFilename ? `Shared ${attachmentFilename}` : ''),
+          is_study_request: false,
+          label: opts?.label ?? null,
+        })
+        .select('id')
+        .single();
+
+      if (error || !msgRow) return;
+
+      if (attachmentUrl && attachmentFilename) {
+        await supabase.from('attachments').insert({
+          message_id: msgRow.id,
+          url: attachmentUrl,
+          filename: attachmentFilename,
+          content_type: attachmentMime,
+        });
+      }
     },
-    [currentUser.id],
+    [currentUser.id, podId],
   );
 
-  return { data, loading, refetch, sendMessage };
+  const togglePin = useCallback(
+    async (messageId: string, currentlyPinned: boolean) => {
+      await supabase.from('messages').update({ is_pinned: !currentlyPinned }).eq('id', messageId);
+    },
+    [],
+  );
+
+  const markResolved = useCallback(
+    async (messageId: string) => {
+      await supabase.from('messages').update({ is_resolved: true }).eq('id', messageId);
+    },
+    [],
+  );
+
+  return { data, loading, refetch, sendMessage, togglePin, markResolved };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -790,10 +848,11 @@ export function usePodTasks(podId: string): {
 export function useSoloTasks(): {
   data: SoloTask[];
   loading: boolean;
-  addTask: (text: string, courseId: string | null) => Promise<void>;
+  addTask: (text: string, courseId: string | null, planId?: string, durationMinutes?: number) => Promise<void>;
   toggleComplete: (id: string) => Promise<void>;
   toggleStuck: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+  updateTask: (id: string, fields: { text?: string; duration_minutes?: number; sort_order?: number }) => Promise<void>;
 } {
   const { currentUser } = useDemoUser();
   const [data, setData] = useState<SoloTask[]>([]);
@@ -804,7 +863,8 @@ export function useSoloTasks(): {
       .from('task_completions')
       .select('*, courses!task_completions_course_id_fkey(code)')
       .eq('profile_id', currentUser.id)
-      .order('created_at', { ascending: false });
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
 
     if (!tasks) return;
 
@@ -812,8 +872,12 @@ export function useSoloTasks(): {
       id: t.id,
       text: t.text,
       courseCode: t.courses?.code ?? undefined,
+      courseId: t.course_id ?? undefined,
+      planId: t.plan_id ?? undefined,
       completed: t.completed,
       isStuck: t.is_stuck,
+      durationMinutes: t.duration_minutes ?? undefined,
+      sortOrder: t.sort_order ?? 0,
       createdAt: timeAgo(t.created_at),
     }));
 
@@ -827,15 +891,19 @@ export function useSoloTasks(): {
   }, [fetchTasks]);
 
   const addTask = useCallback(
-    async (text: string, courseId: string | null) => {
+    async (text: string, courseId: string | null, planId?: string, durationMinutes?: number) => {
+      const maxSort = data.filter((t) => t.planId === planId).reduce((m, t) => Math.max(m, t.sortOrder), -1);
       await supabase.from('task_completions').insert({
         profile_id: currentUser.id,
         text,
         course_id: courseId,
+        plan_id: planId ?? null,
+        duration_minutes: durationMinutes ?? null,
+        sort_order: maxSort + 1,
       });
       await fetchTasks();
     },
-    [currentUser.id, fetchTasks],
+    [currentUser.id, fetchTasks, data],
   );
 
   const toggleComplete = useCallback(
@@ -875,7 +943,135 @@ export function useSoloTasks(): {
     [fetchTasks],
   );
 
-  return { data, loading, addTask, toggleComplete, toggleStuck, deleteTask };
+  const updateTask = useCallback(
+    async (id: string, fields: { text?: string; duration_minutes?: number; sort_order?: number }) => {
+      await supabase.from('task_completions').update(fields).eq('id', id);
+      await fetchTasks();
+    },
+    [fetchTasks],
+  );
+
+  return { data, loading, addTask, toggleComplete, toggleStuck, deleteTask, updateTask };
+}
+
+// ────────────────────────────────────────────────────────────
+// STUDY PLANS
+// ────────────────────────────────────────────────────────────
+
+export function useStudyPlans(): {
+  data: StudyPlan[];
+  loading: boolean;
+  refetch: () => void;
+  createPlan: (fields: { courseId: string; title: string; dueDate?: string; note?: string }) => Promise<string>;
+  updatePlan: (id: string, fields: { title?: string; due_date?: string | null; note?: string | null }) => Promise<void>;
+  deletePlan: (id: string) => Promise<void>;
+} {
+  const { currentUser } = useDemoUser();
+  const [data, setData] = useState<StudyPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      const { data: plans } = await supabase
+        .from('study_plans')
+        .select('*, courses!study_plans_course_id_fkey(code)')
+        .eq('profile_id', currentUser.id)
+        .order('created_at', { ascending: false });
+
+      if (cancelled || !plans) { setLoading(false); return; }
+
+      const { data: allTasks } = await supabase
+        .from('task_completions')
+        .select('*, courses!task_completions_course_id_fkey(code)')
+        .eq('profile_id', currentUser.id)
+        .not('plan_id', 'is', null)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (cancelled) return;
+
+      const tasksByPlan = new Map<string, SoloTask[]>();
+      (allTasks ?? []).forEach((t: any) => {
+        const task: SoloTask = {
+          id: t.id,
+          text: t.text,
+          courseCode: t.courses?.code ?? undefined,
+          courseId: t.course_id ?? undefined,
+          planId: t.plan_id ?? undefined,
+          completed: t.completed,
+          isStuck: t.is_stuck,
+          durationMinutes: t.duration_minutes ?? undefined,
+          sortOrder: t.sort_order ?? 0,
+          createdAt: timeAgo(t.created_at),
+        };
+        const list = tasksByPlan.get(t.plan_id) ?? [];
+        list.push(task);
+        tasksByPlan.set(t.plan_id, list);
+      });
+
+      const enriched: StudyPlan[] = plans.map((p: any) => ({
+        id: p.id,
+        profileId: p.profile_id,
+        courseId: p.course_id,
+        courseCode: p.courses?.code ?? '',
+        title: p.title,
+        dueDate: p.due_date ?? undefined,
+        note: p.note ?? undefined,
+        tasks: tasksByPlan.get(p.id) ?? [],
+        createdAt: timeAgo(p.created_at),
+      }));
+
+      if (!cancelled) {
+        setData(enriched);
+        setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentUser.id, tick]);
+
+  const createPlan = useCallback(
+    async (fields: { courseId: string; title: string; dueDate?: string; note?: string }) => {
+      const { data: row, error } = await supabase
+        .from('study_plans')
+        .insert({
+          profile_id: currentUser.id,
+          course_id: fields.courseId,
+          title: fields.title,
+          due_date: fields.dueDate ?? null,
+          note: fields.note ?? null,
+        })
+        .select('id')
+        .single();
+      if (error || !row) throw new Error('Failed to create plan');
+      refetch();
+      return row.id;
+    },
+    [currentUser.id, refetch],
+  );
+
+  const updatePlan = useCallback(
+    async (id: string, fields: { title?: string; due_date?: string | null; note?: string | null }) => {
+      await supabase.from('study_plans').update(fields).eq('id', id);
+      refetch();
+    },
+    [refetch],
+  );
+
+  const deletePlan = useCallback(
+    async (id: string) => {
+      await supabase.from('study_plans').delete().eq('id', id);
+      refetch();
+    },
+    [refetch],
+  );
+
+  return { data, loading, refetch, createPlan, updatePlan, deletePlan };
 }
 
 // ────────────────────────────────────────────────────────────

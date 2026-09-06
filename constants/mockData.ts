@@ -52,6 +52,11 @@ export interface Message {
   isStudyRequest?: boolean;
   studyRequestId?: string;
   isOwn?: boolean;
+  label?: 'question' | 'screenshot' | 'resource' | 'progress' | null;
+  imageUrl?: string | null;
+  imageName?: string | null;
+  isPinned?: boolean;
+  isResolved?: boolean;
 }
 
 export interface PeerPod {
@@ -88,8 +93,24 @@ export interface SoloTask {
   id: string;
   text: string;
   courseCode?: string;
+  courseId?: string;
+  planId?: string;
   completed: boolean;
   isStuck: boolean;
+  durationMinutes?: number;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface StudyPlan {
+  id: string;
+  profileId: string;
+  courseId: string;
+  courseCode: string;
+  title: string;
+  dueDate?: string;
+  note?: string;
+  tasks: SoloTask[];
   createdAt: string;
 }
 
@@ -445,13 +466,13 @@ export const POD_TASKS: Record<string, { id: string; text: string; completed: bo
 };
 
 export const SOLO_TASKS: SoloTask[] = [
-  { id: 'st1', text: 'Review CSC 202 lecture notes on heaps', courseCode: 'CSC 202', completed: true, isStuck: false, createdAt: '2 days ago' },
-  { id: 'st2', text: 'Practice heap sort implementation', courseCode: 'CSC 202', completed: false, isStuck: false, createdAt: 'Yesterday' },
-  { id: 'st3', text: 'Read Chapter 7 on graph algorithms', courseCode: 'CSC 202', completed: false, isStuck: true, createdAt: 'Yesterday' },
-  { id: 'st4', text: 'Finish MATH 244 problem set 5', courseCode: 'MATH 244', completed: false, isStuck: false, createdAt: 'Today' },
-  { id: 'st5', text: 'Write outline for PHIL 231 essay', courseCode: 'PHIL 231', completed: false, isStuck: false, createdAt: 'Today' },
-  { id: 'st6', text: 'Review STAT 312 confidence intervals', courseCode: 'STAT 312', completed: true, isStuck: false, createdAt: '3 days ago' },
-  { id: 'st7', text: 'Debug CSC 357 memory allocation lab', courseCode: 'CSC 357', completed: false, isStuck: true, createdAt: 'Today' },
+  { id: 'st1', text: 'Review CSC 202 lecture notes on heaps', courseCode: 'CSC 202', completed: true, isStuck: false, sortOrder: 0, createdAt: '2 days ago' },
+  { id: 'st2', text: 'Practice heap sort implementation', courseCode: 'CSC 202', completed: false, isStuck: false, sortOrder: 1, createdAt: 'Yesterday' },
+  { id: 'st3', text: 'Read Chapter 7 on graph algorithms', courseCode: 'CSC 202', completed: false, isStuck: true, sortOrder: 2, createdAt: 'Yesterday' },
+  { id: 'st4', text: 'Finish MATH 244 problem set 5', courseCode: 'MATH 244', completed: false, isStuck: false, sortOrder: 3, createdAt: 'Today' },
+  { id: 'st5', text: 'Write outline for PHIL 231 essay', courseCode: 'PHIL 231', completed: false, isStuck: false, sortOrder: 4, createdAt: 'Today' },
+  { id: 'st6', text: 'Review STAT 312 confidence intervals', courseCode: 'STAT 312', completed: true, isStuck: false, sortOrder: 5, createdAt: '3 days ago' },
+  { id: 'st7', text: 'Debug CSC 357 memory allocation lab', courseCode: 'CSC 357', completed: false, isStuck: true, sortOrder: 6, createdAt: 'Today' },
 ];
 
 export const COLLABORATION_PREFERENCES = [
