@@ -214,7 +214,7 @@ export default function HomeScreen() {
                         </View>
                         <Text style={styles.requestTime}>{req.createdAt}</Text>
                       </View>
-                      <Text style={styles.requestTopic} numberOfLines={1}>
+                      <Text style={styles.requestTopic} numberOfLines={2}>
                         {req.topic}
                       </Text>
                       <View style={styles.requestMeta}>

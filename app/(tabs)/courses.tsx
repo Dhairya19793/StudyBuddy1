@@ -15,7 +15,9 @@ import { useRouter } from 'expo-router';
 import { BookOpen, MessageSquare, ChevronRight, Search } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import { Course } from '@/constants/mockData';
-import { useCourses } from '@/hooks/useStudyData';
+import { useCourses, useAllCourses, useJoinCourse } from '@/hooks/useStudyData';
+import { useFocusEffect } from 'expo-router';
+import { Plus } from 'lucide-react-native';
 
 function getCourseAbbreviation(code: string): string {
   const prefix = code.split(/\s+/)[0].toUpperCase();
@@ -31,7 +33,26 @@ export default function CoursesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { data: courses, loading } = useCourses();
+  const { data: courses, loading, refetch } = useCourses();
+  const { data: allCourses, refetch: refetchAll } = useAllCourses();
+  const { join } = useJoinCourse();
+  const [joining, setJoining] = useState<string | null>(null);
+
+  useFocusEffect(useCallback(() => { refetch(); refetchAll(); }, [refetch, refetchAll]));
+
+  const enrolledIds = useMemo(() => new Set(courses.map((c) => c.id)), [courses]);
+  const availableCourses = useMemo(
+    () => allCourses.filter((c) => !enrolledIds.has(c.id)),
+    [allCourses, enrolledIds],
+  );
+
+  const handleJoin = useCallback(async (courseId: string) => {
+    setJoining(courseId);
+    await join(courseId);
+    refetch();
+    refetchAll();
+    setJoining(null);
+  }, [join, refetch, refetchAll]);
 
   const isWideScreen = width > 900;
   const numColumns = isWideScreen ? 2 : 1;
@@ -186,6 +207,39 @@ export default function CoursesScreen() {
           ListEmptyComponent={ListEmptyComponent}
           ItemSeparatorComponent={
             !isWideScreen ? () => <View style={styles.separator} /> : undefined
+          }
+          ListFooterComponent={
+            availableCourses.length > 0 ? (
+              <View style={styles.joinSection}>
+                <Text style={styles.joinSectionTitle}>Available Course Hubs</Text>
+                <Text style={styles.joinSectionSub}>Join a hub to connect with classmates</Text>
+                {availableCourses.map((c) => (
+                  <View key={c.id} style={styles.joinCard}>
+                    <View style={[styles.avatar, { backgroundColor: c.color }]}>
+                      <Text style={styles.avatarText}>{getCourseAbbreviation(c.code)}</Text>
+                    </View>
+                    <View style={styles.joinInfo}>
+                      <Text style={styles.courseCode}>{c.code}</Text>
+                      <Text style={styles.courseName}>{c.name}</Text>
+                    </View>
+                    <Pressable
+                      style={({ pressed }) => [styles.joinBtn, pressed && { opacity: 0.8 }]}
+                      onPress={() => handleJoin(c.id)}
+                      disabled={joining === c.id}
+                    >
+                      {joining === c.id ? (
+                        <ActivityIndicator size="small" color={Colors.neutral[0]} />
+                      ) : (
+                        <>
+                          <Plus size={14} color={Colors.neutral[0]} />
+                          <Text style={styles.joinBtnText}>Join</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null
           }
         />
       </View>
@@ -368,5 +422,48 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     ...Typography.caption,
     color: Colors.neutral[400],
+  },
+  joinSection: {
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.lg,
+  },
+  joinSectionTitle: {
+    ...Typography.h3,
+    color: Colors.ink,
+    marginBottom: 4,
+  },
+  joinSectionSub: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  joinCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.neutral[200],
+    borderStyle: 'dashed' as any,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  joinInfo: {
+    flex: 1,
+    marginLeft: Spacing.md,
+  },
+  joinBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primary[500],
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  joinBtnText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: Colors.neutral[0],
   },
 });

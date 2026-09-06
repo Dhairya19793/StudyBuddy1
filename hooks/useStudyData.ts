@@ -1075,6 +1075,78 @@ export function useStudyPlans(): {
 }
 
 // ────────────────────────────────────────────────────────────
+// ALL COURSES (for browse/join)
+// ────────────────────────────────────────────────────────────
+
+export function useAllCourses(): {
+  data: { id: string; code: string; name: string; department: string; color: string; memberCount: number }[];
+  loading: boolean;
+  refetch: () => void;
+} {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      const { data: courses } = await supabase.from('courses').select('*');
+      if (cancelled || !courses) { setLoading(false); return; }
+
+      const enriched = await Promise.all(
+        courses.map(async (c: any) => {
+          const { count } = await supabase
+            .from('course_members')
+            .select('*', { count: 'exact', head: true })
+            .eq('course_id', c.id);
+          return { id: c.id, code: c.code, name: c.name, department: c.department, color: c.color, memberCount: count ?? 0 };
+        }),
+      );
+
+      if (!cancelled) { setData(enriched); setLoading(false); }
+    })();
+
+    return () => { cancelled = true; };
+  }, [tick]);
+
+  return { data, loading, refetch };
+}
+
+// ────────────────────────────────────────────────────────────
+// JOIN / LEAVE COURSE HUB
+// ────────────────────────────────────────────────────────────
+
+export function useJoinCourse() {
+  const { currentUser } = useDemoUser();
+
+  const join = useCallback(
+    async (courseId: string) => {
+      await supabase.from('course_members').upsert(
+        { profile_id: currentUser.id, course_id: courseId },
+        { onConflict: 'profile_id,course_id' },
+      );
+    },
+    [currentUser.id],
+  );
+
+  const leave = useCallback(
+    async (courseId: string) => {
+      await supabase
+        .from('course_members')
+        .delete()
+        .eq('profile_id', currentUser.id)
+        .eq('course_id', courseId);
+    },
+    [currentUser.id],
+  );
+
+  return { join, leave };
+}
+
+// ────────────────────────────────────────────────────────────
 // AVAILABILITY OVERLAP
 // ────────────────────────────────────────────────────────────
 

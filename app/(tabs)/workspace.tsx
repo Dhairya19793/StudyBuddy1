@@ -529,13 +529,33 @@ export default function WorkspaceScreen() {
             />
 
             <Text style={st.fieldLabel}>TARGET DATE (OPTIONAL)</Text>
-            <TextInput
-              style={st.modalInput}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={Colors.neutral[400]}
-              value={newDueDate}
-              onChangeText={setNewDueDate}
-            />
+            <View style={st.datePickerRow}>
+              {[
+                { label: 'Tomorrow', days: 1 },
+                { label: 'In 3 days', days: 3 },
+                { label: 'In 1 week', days: 7 },
+                { label: 'In 2 weeks', days: 14 },
+              ].map((opt) => {
+                const d = new Date();
+                d.setDate(d.getDate() + opt.days);
+                const iso = d.toISOString().split('T')[0];
+                const isActive = newDueDate === iso;
+                return (
+                  <Pressable
+                    key={opt.days}
+                    style={[st.dateChip, isActive && st.dateChipActive]}
+                    onPress={() => setNewDueDate(isActive ? '' : iso)}
+                  >
+                    <Text style={[st.dateChipText, isActive && st.dateChipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {newDueDate ? (
+              <Text style={st.datePreview}>{newDueDate}</Text>
+            ) : null}
 
             <Text style={st.fieldLabel}>NOTE (OPTIONAL)</Text>
             <TextInput
@@ -690,6 +710,12 @@ const st = StyleSheet.create({
   modalTitle: { fontFamily: 'SourceSerifPro-Bold', fontSize: 20, color: Colors.neutral[900], marginBottom: Spacing.lg },
   fieldLabel: { fontFamily: 'Inter-SemiBold', fontSize: 11, letterSpacing: 0.8, color: Colors.neutral[500], marginBottom: 6, marginTop: Spacing.md },
   modalInput: { fontFamily: 'Inter-Regular', fontSize: 15, color: Colors.neutral[900], backgroundColor: Colors.neutral[50], borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.neutral[200], paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm + 2, ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {}) },
+  datePickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.xs },
+  dateChip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.neutral[200], backgroundColor: Colors.neutral[50] },
+  dateChipActive: { borderColor: FOREST, backgroundColor: Colors.primary[50] },
+  dateChipText: { fontFamily: 'Inter-Medium', fontSize: 13, color: Colors.neutral[600] },
+  dateChipTextActive: { color: FOREST },
+  datePreview: { fontFamily: 'Inter-Regular', fontSize: 12, color: Colors.neutral[500], marginBottom: Spacing.xs },
   coursePicker: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.neutral[50], borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.neutral[200], paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm + 2 },
   coursePickerText: { fontFamily: 'Inter-Medium', fontSize: 15, color: Colors.neutral[700] },
   modalActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xl },
