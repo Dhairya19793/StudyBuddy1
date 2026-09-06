@@ -4,6 +4,7 @@ A peer-study platform built for college students. StudyMode helps students find 
 
 ## Features
 
+
 ### Course Hubs
 Each course gets a dedicated space where students can browse and post study requests, see who's interested, and connect with classmates facing the same material.
 
