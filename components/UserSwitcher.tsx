@@ -91,6 +91,14 @@ export default function UserSwitcher() {
   );
 }
 
+
+
+
+
+
+
+
+
 const styles = StyleSheet.create({
   trigger: {
     flexDirection: 'row',
