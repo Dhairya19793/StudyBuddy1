@@ -48,7 +48,7 @@ function SkeletonCard({ width: w, height: h }: { width: number | string; height:
 }
 
 /* ── Stagger wrapper ────────────────────────────── */
-function StaggerIn({ index, children }: { index: number; children: React.ReactNode }) {
+function StaggerIn({ index, children, style: extraStyle }: { index: number; children: React.ReactNode; style?: any }) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(14);
 
@@ -63,12 +63,12 @@ function StaggerIn({ index, children }: { index: number; children: React.ReactNo
     );
   }, [index, opacity, translateY]);
 
-  const style = useAnimatedStyle(() => ({
+  const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
     transform: [{ translateY: translateY.value }],
   }));
 
-  return <Animated.View style={style}>{children}</Animated.View>;
+  return <Animated.View style={[animStyle, extraStyle]}>{children}</Animated.View>;
 }
 
 export default function HomeScreen() {
@@ -199,11 +199,10 @@ export default function HomeScreen() {
             ) : (
               <View style={isWide ? styles.requestsGrid : undefined}>
                 {studyRequests.slice(0, isWide ? 4 : 3).map((req, idx) => (
-                  <StaggerIn key={req.id} index={4 + idx}>
+                  <StaggerIn key={req.id} index={4 + idx} style={isWide ? styles.requestCardWide : undefined}>
                     <Pressable
                       style={({ pressed }) => [
                         styles.requestCard,
-                        isWide && styles.requestCardWide,
                         pressed && styles.cardPressed,
                       ]}
                       onPress={() => router.push(`/course/${req.courseId}` as any)}
@@ -415,7 +414,7 @@ const styles = StyleSheet.create({
 
   /* CTA */
   cta: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary[700],
+    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary[500],
     borderRadius: BorderRadius.lg, padding: Spacing.lg, marginBottom: Spacing.lg,
     gap: Spacing.md, ...Shadows.md,
   },
@@ -436,7 +435,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3, borderLeftColor: Colors.secondary[500],
     padding: Spacing.md, paddingLeft: Spacing.md + 2, marginBottom: Spacing.sm,
   },
-  requestCardWide: { width: '48.5%' as any, marginBottom: 0 },
+  requestCardWide: { width: '48%' as any, marginBottom: 0 },
   cardPressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
   requestTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
   courseCodeBadge: { backgroundColor: Colors.sage, paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: BorderRadius.sm },

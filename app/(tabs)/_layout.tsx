@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { BookOpen, Users, ClipboardList, User, Home } from 'lucide-react-native';
-import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { Colors, Spacing, BorderRadius } from '@/constants/theme';
 
 const TAB_ITEMS = [
   { name: 'index', title: 'Home', Icon: Home },
@@ -21,10 +21,10 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: Colors.primary[500],
         tabBarInactiveTintColor: Colors.neutral[500],
-        tabBarStyle: isDesktop ? styles.sideBar : styles.bottomBar,
-        tabBarLabelStyle: isDesktop ? styles.sideBarLabel : styles.bottomBarLabel,
-        tabBarItemStyle: isDesktop ? styles.sideBarItem : styles.bottomBarItem,
-        tabBarPosition: isDesktop ? 'left' : 'bottom',
+        tabBarStyle: isDesktop ? styles.topBar : styles.bottomBar,
+        tabBarLabelStyle: isDesktop ? styles.topBarLabel : styles.bottomBarLabel,
+        tabBarItemStyle: isDesktop ? styles.topBarItem : styles.bottomBarItem,
+        tabBarPosition: isDesktop ? 'top' : 'bottom',
         tabBarActiveBackgroundColor: isDesktop ? Colors.sage : undefined,
       }}
     >
@@ -35,7 +35,7 @@ export default function TabLayout() {
           options={{
             title: tab.title,
             tabBarIcon: ({ color, size }) => (
-              <tab.Icon size={isDesktop ? 18 : size} color={color} strokeWidth={2} />
+              <tab.Icon size={isDesktop ? 17 : size} color={color} strokeWidth={2} />
             ),
           }}
         />
@@ -49,9 +49,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderTopColor: Colors.neutral[200],
     borderTopWidth: 1,
-    height: Platform.OS === 'web' ? 60 : 84,
-    paddingTop: 6,
-    paddingBottom: Platform.OS === 'web' ? 6 : 24,
+    height: Platform.OS === 'web' ? 56 : 84,
+    paddingTop: 4,
+    paddingBottom: Platform.OS === 'web' ? 4 : 24,
   },
   bottomBarLabel: {
     fontFamily: 'Inter-Medium',
@@ -61,24 +61,22 @@ const styles = StyleSheet.create({
   bottomBarItem: {
     paddingTop: 4,
   },
-  sideBar: {
+  topBar: {
     backgroundColor: Colors.surface,
-    borderRightColor: Colors.neutral[200],
-    borderRightWidth: StyleSheet.hairlineWidth,
-    width: 210,
-    paddingTop: 32,
-    paddingHorizontal: 12,
+    borderBottomColor: Colors.neutral[200],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    height: 52,
+    paddingHorizontal: 24,
   },
-  sideBarLabel: {
+  topBarLabel: {
     fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    marginLeft: 2,
+    fontSize: 13,
+    marginLeft: 4,
   },
-  sideBarItem: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+  topBarItem: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
     borderRadius: BorderRadius.md,
-    marginBottom: 4,
-    justifyContent: 'flex-start',
+    flexDirection: 'row',
   },
 });

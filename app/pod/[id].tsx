@@ -528,11 +528,11 @@ export default function PodDetailScreen() {
               <View style={s.desktopChatWrap}>{ChatSection}</View>
             </View>
             <View style={s.desktopRight}>
-              <Text style={s.sidebarHeading}>Members</Text>
-              {MembersSection}
-              <View style={s.sidebarDivider} />
               <Text style={s.sidebarHeading}>Tasks</Text>
               <View style={s.flex1}>{TasksSection}</View>
+              <View style={s.sidebarDivider} />
+              <Text style={s.sidebarHeading}>Members</Text>
+              {MembersSection}
             </View>
           </View>
         </View>
