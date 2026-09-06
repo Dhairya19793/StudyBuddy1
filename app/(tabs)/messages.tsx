@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MessageSquare, BookOpen, Users, Plus, User as UserIcon, Search, X } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
-import { useConversations, useMarkChannelRead, useStartDM, useCourses } from '@/hooks/useStudyData';
+import { useConversations, useMarkChannelRead, useStartDM } from '@/hooks/useStudyData';
 import { useDemoUser } from '@/contexts/DemoUserContext';
 import { supabase } from '@/lib/supabase';
 import type { Conversation } from '@/hooks/useStudyData';
@@ -29,11 +29,37 @@ export default function MessagesScreen() {
   const { data: conversations, loading, refetch } = useConversations();
   const markRead = useMarkChannelRead();
   const startDM = useStartDM();
-  const { data: courses } = useCourses();
   const [showNewDM, setShowNewDM] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [people, setPeople] = useState<{ id: string; name: string; initials: string }[]>([]);
   const [searchResults, setSearchResults] = useState<{ id: string; name: string; initials: string }[]>([]);
   const [searching, setSearching] = useState(false);
+  const [dmError, setDmError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showNewDM) return;
+    let cancelled = false;
+    setSearching(true);
+    (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, initials')
+        .neq('id', currentUser.id)
+        .order('name', { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        setDmError('Classmates could not be loaded.');
+        setPeople([]);
+        setSearchResults([]);
+      } else {
+        const nextPeople = data ?? [];
+        setPeople(nextPeople);
+        setSearchResults(nextPeople);
+      }
+      setSearching(false);
+    })();
+    return () => { cancelled = true; };
+  }, [showNewDM, currentUser.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,39 +81,27 @@ export default function MessagesScreen() {
     [markRead, router],
   );
 
-  const handleSearch = useCallback(async (query: string) => {
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
-    if (query.trim().length < 1) {
-      setSearchResults([]);
-      return;
-    }
-    setSearching(true);
-    // Search course members for users in shared courses
-    const courseIds = courses.map((c) => c.id);
-    if (courseIds.length === 0) { setSearching(false); return; }
-
-    const { data: memberships } = await supabase
-      .from('course_members')
-      .select('profiles!course_members_profile_id_fkey(id, name, initials)')
-      .in('course_id', courseIds)
-      .neq('profile_id', currentUser.id);
-
-    const users = (memberships ?? [])
-      .map((m: any) => m.profiles)
-      .filter((u: any) => u && u.name?.toLowerCase().includes(query.toLowerCase()))
-      .filter((u: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.id === u.id) === i)
-      .slice(0, 20);
-
-    setSearchResults(users);
-    setSearching(false);
-  }, [courses, currentUser.id]);
+    const normalized = query.trim().toLowerCase();
+    setSearchResults(
+      normalized.length === 0
+        ? people
+        : people.filter((person) => person.name.toLowerCase().includes(normalized)),
+    );
+  }, [people]);
 
   const handleStartDM = useCallback(async (userId: string, name: string) => {
-    const chId = await startDM(userId);
-    setShowNewDM(false);
-    setSearchQuery('');
-    setSearchResults([]);
-    router.push(`/dm/${chId}?otherName=${encodeURIComponent(name)}` as any);
+    try {
+      const chId = await startDM(userId);
+      setShowNewDM(false);
+      setSearchQuery('');
+      setSearchResults([]);
+      setDmError(null);
+      router.push(`/dm/${chId}?otherName=${encodeURIComponent(name)}` as any);
+    } catch {
+      setDmError('That conversation could not be started.');
+    }
   }, [startDM, router]);
 
   const renderItem = useCallback(
@@ -215,6 +229,7 @@ export default function MessagesScreen() {
             </View>
 
             {searching && <ActivityIndicator size="small" color={Colors.primary[500]} style={{ marginVertical: Spacing.md }} />}
+            {dmError && <Text style={styles.noResults}>{dmError}</Text>}
 
             <FlatList
               data={searchResults}
@@ -233,7 +248,7 @@ export default function MessagesScreen() {
                 </Pressable>
               )}
               ListEmptyComponent={
-                searchQuery.trim().length > 0 && !searching ? (
+                !searching && searchResults.length === 0 ? (
                   <Text style={styles.noResults}>No classmates found</Text>
                 ) : null
               }

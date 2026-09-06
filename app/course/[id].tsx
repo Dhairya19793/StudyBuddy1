@@ -1145,6 +1145,42 @@ const styles = StyleSheet.create({
   srInterestedCount: {
     ...Typography.captionMedium,
     color: Colors.neutral[500],
+    flex: 1,
+  },
+  srFooterActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  dmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.primary[500],
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: Spacing.sm,
+  },
+  dmBtnText: {
+    ...Typography.captionMedium,
+    color: Colors.neutral[0],
+  },
+  scheduleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.primary[50],
+    borderWidth: 1,
+    borderColor: Colors.primary[200],
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: Spacing.sm,
+  },
+  scheduleBtnText: {
+    ...Typography.captionMedium,
+    color: Colors.primary[600],
   },
 
   /* ── interested button: filled (default) ── */
@@ -1245,11 +1281,38 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     ...Shadows.lg,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+  },
   modalTitle: {
     fontFamily: 'SourceSerifPro-Bold',
     fontSize: 20,
     color: Colors.neutral[900],
     marginBottom: Spacing.xs,
+  },
+  modalCloseBtn: {
+    ...Typography.captionMedium,
+    color: Colors.primary[500],
+  },
+  schedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.neutral[200],
+  },
+  schedDay: {
+    ...Typography.bodyMedium,
+    color: Colors.neutral[800],
+    flex: 1,
+  },
+  schedTime: {
+    ...Typography.caption,
+    color: Colors.neutral[600],
   },
   modalSubtitle: {
     ...Typography.caption,

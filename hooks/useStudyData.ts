@@ -1604,13 +1604,13 @@ export function useStartDM() {
   return useCallback(
     async (otherUserId: string): Promise<string> => {
       // Check if a DM channel already exists between these two users
+      // Query channels where current user is user1 OR user2, then filter for the other participant
       const { data: existing } = await supabase
         .from('channels')
-        .select('id')
+        .select('id, user1_id, user2_id')
         .eq('is_direct', true)
         .or(`user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`)
-        .or(`user1_id.eq.${otherUserId},user2_id.eq.${otherUserId}`)
-        .limit(10);
+        .limit(50);
 
       // Filter to find the channel where both users are participants
       const match = (existing ?? []).find(

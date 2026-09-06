@@ -178,12 +178,12 @@ const styles = StyleSheet.create({
   msgRowOwn: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   msgRowOther: { alignSelf: 'flex-start' },
   bubble: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm + 2, borderRadius: BorderRadius.lg },
-  bubbleOwn: { backgroundColor: FOREST, borderBottomRightRadius: BorderRadius.xs },
-  bubbleOther: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.neutral[200], borderBottomLeftRadius: BorderRadius.xs },
+  bubbleOwn: { backgroundColor: FOREST, borderBottomRightRadius: BorderRadius.sm },
+  bubbleOther: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.neutral[200], borderBottomLeftRadius: BorderRadius.sm },
   bubbleText: { fontSize: 15, lineHeight: 20 },
   bubbleTextOwn: { color: Colors.neutral[0], fontFamily: 'Inter-Regular' },
   bubbleTextOther: { color: Colors.neutral[800], fontFamily: 'Inter-Regular' },
-  timestamp: { fontSize: 11, color: Colors.neutral[400], marginTop: 2, marginHorizontal: Spacing.xs },
+  timestamp: { fontSize: 11, color: Colors.neutral[400], marginTop: 2, marginHorizontal: 4 },
 
   inputSafeArea: { backgroundColor: Colors.surface },
   inputBar: {
