@@ -24,10 +24,10 @@ import { PeerPod } from '@/constants/mockData';
 import { usePods } from '@/hooks/useStudyData';
 
 /* ── Colour tokens ──────────────────────────────── */
-const FOREST_GREEN = '#2D5F3A';
-const MUTED_GOLD = '#C9A93D';
-const OFF_WHITE = '#F8F7F5';
-const MEETING_BG = '#E8F0EC';
+const FOREST_GREEN = '#2F6B45';
+const MUTED_GOLD = '#D4A72C';
+const OFF_WHITE = '#F8F6F0';
+const MEETING_BG = '#E7EFE8';
 
 /* ── Deterministic avatar colours ───────────────── */
 const AVATAR_COLORS = [

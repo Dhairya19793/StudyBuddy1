@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
@@ -14,11 +14,13 @@ import {
 } from '@expo-google-fonts/source-serif-pro';
 import * as SplashScreen from 'expo-splash-screen';
 import { DemoUserProvider } from '@/contexts/DemoUserContext';
+import IntroAnimation from '@/components/IntroAnimation';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   useFrameworkReady();
+  const [showIntro, setShowIntro] = useState(true);
 
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Regular': Inter_400Regular,
@@ -33,6 +35,10 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  const handleIntroFinish = useCallback(() => {
+    setShowIntro(false);
+  }, []);
 
   if (!fontsLoaded && !fontError) {
     return null;
@@ -56,6 +62,7 @@ export default function RootLayout() {
         />
         <Stack.Screen name="+not-found" />
       </Stack>
+      {showIntro && <IntroAnimation onFinish={handleIntroFinish} />}
       <StatusBar style="dark" />
     </DemoUserProvider>
   );

@@ -39,9 +39,9 @@ import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/
 import type { SoloTask, StudyPlan } from '@/constants/mockData';
 import { useCourses, useSoloTasks, useStudyPlans } from '@/hooks/useStudyData';
 
-const FOREST = '#2D5F3A';
-const GOLD = '#C9A93D';
-const OFF_WHITE = '#F8F7F5';
+const FOREST = '#2F6B45';
+const GOLD = '#D4A72C';
+const OFF_WHITE = '#F8F6F0';
 
 type Screen = 'plans' | 'detail' | 'focus';
 
@@ -640,7 +640,7 @@ const st = StyleSheet.create({
 
   // Task card
   taskCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.neutral[200], padding: Spacing.md, marginBottom: Spacing.sm, ...Shadows.sm },
-  taskCardStuck: { borderColor: Colors.warning[300], backgroundColor: '#FFFDF5' },
+  taskCardStuck: { borderColor: Colors.warning[300], backgroundColor: '#FBF6E8' },
   taskCardDone: { opacity: 0.7 },
   checkbox: { marginRight: Spacing.md, marginTop: 2 },
   taskBody: { flex: 1, marginRight: Spacing.sm },

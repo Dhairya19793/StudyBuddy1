@@ -45,11 +45,11 @@ if (Platform.OS !== 'web') {
   ImagePicker = require('expo-image-picker');
 }
 
-const FOREST_GREEN = '#2D5F3A';
-const MUTED_GOLD = '#C9A93D';
-const OFF_WHITE = '#F8F7F5';
-const QUESTION_BG = '#FFF8E6';
-const QUESTION_BORDER = '#E8D48B';
+const FOREST_GREEN = '#2F6B45';
+const MUTED_GOLD = '#D4A72C';
+const OFF_WHITE = '#F8F6F0';
+const QUESTION_BG = '#FBF6E8';
+const QUESTION_BORDER = '#EDDA9B';
 
 const AVATAR_COLORS = [
   Colors.primary[500], Colors.secondary[600], Colors.accent[500],
@@ -64,7 +64,7 @@ type MessageLabel = 'question' | 'screenshot' | 'resource' | 'progress';
 const LABEL_OPTIONS: { key: MessageLabel; label: string; icon: typeof HelpCircle; color: string }[] = [
   { key: 'question', label: 'Question', icon: HelpCircle, color: '#D4A017' },
   { key: 'screenshot', label: 'Screenshot', icon: Camera, color: Colors.primary[500] },
-  { key: 'resource', label: 'Resource', icon: BookOpen, color: '#3B82F6' },
+  { key: 'resource', label: 'Resource', icon: BookOpen, color: '#6B8E6B' },
   { key: 'progress', label: 'Progress', icon: TrendingUp, color: '#10B981' },
 ];
 

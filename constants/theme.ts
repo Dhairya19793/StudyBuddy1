@@ -1,59 +1,65 @@
+/* ────────────────────────────────────────────────────────────
+ *  StudyMode Design System
+ *  Warm off-white + deep ink green + forest green actions +
+ *  sage surfaces + muted gold accent + terracotta error.
+ * ──────────────────────────────────────────────────────────── */
+
 export const Colors = {
-  // Primary - Deep Forest Green
+  // Primary — Forest Green action family
   primary: {
-    50: '#E8F0EC',
+    50: '#E7EFE8',
     100: '#C5DAC9',
     200: '#9FC2A5',
-    300: '#799A81',
-    400: '#5C7F65',
-    500: '#2D5F3A',
-    600: '#265233',
-    700: '#1E432A',
-    800: '#173421',
-    900: '#0F2517',
+    300: '#6B9A73',
+    400: '#488B55',
+    500: '#2F6B45',
+    600: '#275B3B',
+    700: '#214E34',
+    800: '#193E29',
+    900: '#193326',
   },
-  // Secondary - Muted Gold
+  // Secondary — Muted Gold accent
   secondary: {
-    50: '#FDF8EE',
-    100: '#F8EDCF',
-    200: '#F2DFA9',
-    300: '#EBD183',
-    400: '#E3C35D',
-    500: '#C9A93D',
-    600: '#A88C2E',
-    700: '#876F24',
-    800: '#66531B',
-    900: '#453811',
+    50: '#FBF6E8',
+    100: '#F5E9C3',
+    200: '#EDDA9B',
+    300: '#E4C96F',
+    400: '#DDBF50',
+    500: '#D4A72C',
+    600: '#B89025',
+    700: '#96751E',
+    800: '#745A17',
+    900: '#52400F',
   },
-  // Accent - Warm Sage
+  // Accent — Soft Sage surfaces
   accent: {
-    50: '#F0F4F0',
-    100: '#D9E3D9',
-    200: '#B8CCB8',
-    300: '#97B497',
-    400: '#7FA07F',
+    50: '#EFF3EF',
+    100: '#DBE4DB',
+    200: '#C3D4C3',
+    300: '#A8C1A8',
+    400: '#8DAF8D',
     500: '#6B8E6B',
     600: '#587558',
     700: '#465D46',
     800: '#354635',
     900: '#232E23',
   },
-  // Neutral
+  // Neutral — Warm grays
   neutral: {
     0: '#FFFFFF',
-    50: '#F8F7F5',
-    100: '#F0EDE8',
+    50: '#F8F6F0',
+    100: '#F0EDE6',
     200: '#E4DFD7',
     300: '#D1CAC0',
     400: '#B5ADA1',
-    500: '#928882',
+    500: '#81796F',
     600: '#6F665F',
     700: '#524B45',
     800: '#3A3530',
-    900: '#231F1B',
+    900: '#193326',
     950: '#141210',
   },
-  // Success
+  // Success — earthy green
   success: {
     50: '#ECFDF5',
     100: '#D1FAE5',
@@ -63,7 +69,7 @@ export const Colors = {
     500: '#10B981',
     600: '#059669',
   },
-  // Warning
+  // Warning — warm amber
   warning: {
     50: '#FFFBEB',
     100: '#FEF3C7',
@@ -73,20 +79,23 @@ export const Colors = {
     500: '#F59E0B',
     600: '#D97706',
   },
-  // Error
+  // Error — muted terracotta
   error: {
-    50: '#FEF2F2',
-    100: '#FEE2E2',
-    200: '#FECACA',
-    300: '#FCA5A5',
-    400: '#F87171',
-    500: '#EF4444',
-    600: '#DC2626',
+    50: '#FDF2F0',
+    100: '#F9DDD8',
+    200: '#F0B8AF',
+    300: '#D9887E',
+    400: '#C96A5F',
+    500: '#B9534B',
+    600: '#9E3F38',
   },
-  // Background
-  background: '#F8F7F5',
+  // Semantic
+  background: '#F8F6F0',
   surface: '#FFFFFF',
-  surfaceElevated: '#FFFEF9',
+  surfaceElevated: '#FDFBF5',
+  sage: '#E7EFE8',
+  ink: '#193326',
+  textSecondary: '#81796F',
 };
 
 export const Spacing = {
@@ -164,23 +173,23 @@ export const Typography = {
 
 export const Shadows = {
   sm: {
-    shadowColor: '#000',
+    shadowColor: '#193326',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 1,
   },
   md: {
-    shadowColor: '#000',
+    shadowColor: '#193326',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 3,
   },
   lg: {
-    shadowColor: '#000',
+    shadowColor: '#193326',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.1,
     shadowRadius: 16,
     elevation: 6,
   },

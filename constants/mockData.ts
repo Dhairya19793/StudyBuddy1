@@ -131,7 +131,7 @@ export const COURSES: Course[] = [
     code: 'CSC 202',
     name: 'Data Structures',
     department: 'Computer Science',
-    color: '#2D5F3A',
+    color: '#2F6B45',
     memberCount: 34,
     activeRequests: 3,
     recentMessage: 'Anyone know how to approach the BST balancing problem?',

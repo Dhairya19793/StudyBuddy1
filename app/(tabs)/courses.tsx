@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...Typography.h1,
-    color: Colors.primary[500],
+    color: Colors.ink,
   },
   searchContainer: {
     paddingHorizontal: Spacing.lg,

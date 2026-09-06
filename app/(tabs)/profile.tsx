@@ -29,9 +29,9 @@ import { useCourses, usePods, useSoloTasks } from '@/hooks/useStudyData';
 import UserSwitcher from '@/components/UserSwitcher';
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
-const FOREST = '#2D5F3A';
-const GOLD = '#C9A93D';
-const OFF_WHITE = '#F8F7F5';
+const FOREST = '#2F6B45';
+const GOLD = '#D4A72C';
+const OFF_WHITE = '#F8F6F0';
 
 /* ------------------------------------------------------------------ */
 /*  Small reusable pieces                                             */
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     fontFamily: 'SourceSerifPro-Bold',
     fontSize: 24,
     lineHeight: 30,
-    color: Colors.neutral[900],
+    color: Colors.ink,
     textAlign: 'center',
   },
   emailRow: {
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     fontFamily: 'SourceSerifPro-SemiBold',
     fontSize: 16,
     lineHeight: 22,
-    color: Colors.neutral[900],
+    color: Colors.ink,
     marginBottom: 0,
   },
 
