@@ -5,12 +5,14 @@ import {
   ScrollView,
   StyleSheet,
   Pressable,
+  useWindowDimensions,
 } from 'react-native';
 import {
   Users,
   CircleCheckBig,
   ChevronLeft,
   ChevronRight,
+  CalendarDays,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import type { ScheduleItem } from '@/hooks/useStudyData';
@@ -18,9 +20,10 @@ import type { ScheduleItem } from '@/hooks/useStudyData';
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const START_HOUR = 7;
 const END_HOUR = 23;
-const HOUR_HEIGHT = 52;
-const HOUR_HEIGHT_WEEK = 36;
-const LABEL_WIDTH = 56;
+const HOUR_HEIGHT = 48;
+const HOUR_HEIGHT_WEEK = 34;
+const LABEL_WIDTH = 52;
+const SIDEBAR_WIDTH = 160;
 const TIMELINE_HEIGHT = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
 const TIMELINE_HEIGHT_WEEK = (END_HOUR - START_HOUR) * HOUR_HEIGHT_WEEK;
 
@@ -43,7 +46,7 @@ function timeToY(time: string, hourHeight: number): number {
 }
 
 function blockHeight(start: string, end: string, hourHeight: number): number {
-  return Math.max(22, timeToY(end, hourHeight) - timeToY(start, hourHeight));
+  return Math.max(20, timeToY(end, hourHeight) - timeToY(start, hourHeight));
 }
 
 function getWeekDates(weekOffset: number) {
@@ -63,6 +66,8 @@ function monthShort(m: number): string {
 }
 
 export default function CalendarSchedule({ items, loading }: { items: ScheduleItem[]; loading: boolean }) {
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 640;
   const [viewMode, setViewMode] = useState<'today' | 'week'>('today');
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -110,6 +115,57 @@ export default function CalendarSchedule({ items, loading }: { items: ScheduleIt
     );
   }
 
+  const hasSideContent = todayPods.length > 0 || todayTasks.length > 0;
+
+  /* ── Sidebar (classes/pods + tasks) ── */
+  const sidebar = (
+    <View style={[styles.sidebar, isNarrow && styles.sidebarNarrow]}>
+      <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
+        {todayPods.length > 0 && (
+          <View style={styles.sidebarSection}>
+            <View style={styles.sidebarLabelRow}>
+              <Users size={11} color={Colors.primary[600]} />
+              <Text style={styles.sidebarLabel}>Classes & Pods</Text>
+            </View>
+            {todayPods.map(pod => (
+              <View key={pod.id} style={styles.sidebarItem}>
+                <View style={styles.sidebarDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sidebarItemTitle} numberOfLines={1}>{pod.title}</Text>
+                  {pod.courseCode ? <Text style={styles.sidebarItemSub}>{pod.courseCode}</Text> : null}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {todayTasks.length > 0 && (
+          <View style={styles.sidebarSection}>
+            <View style={styles.sidebarLabelRow}>
+              <CircleCheckBig size={11} color={Colors.warning[600]} />
+              <Text style={styles.sidebarLabel}>Tasks</Text>
+            </View>
+            {todayTasks.map(task => (
+              <View key={task.id} style={styles.sidebarItem}>
+                <View style={[styles.sidebarDot, { backgroundColor: Colors.warning[400] }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sidebarItemTitle} numberOfLines={1}>{task.title}</Text>
+                  {task.courseCode ? <Text style={styles.sidebarItemSub}>{task.courseCode}</Text> : null}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {!hasSideContent && (
+          <View style={styles.sidebarEmpty}>
+            <Text style={styles.sidebarEmptyText}>No classes or tasks today</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* Tab Toggle */}
@@ -132,76 +188,50 @@ export default function CalendarSchedule({ items, loading }: { items: ScheduleIt
         <View>
           <Text style={styles.dateHeader}>{todayDateStr}</Text>
 
-          {/* Timeline */}
-          <View style={styles.timelineContainer}>
-            <View style={styles.hourGrid}>
-              {hours.map(h => (
-                <View key={h} style={styles.hourRow}>
-                  <Text style={styles.hourLabel}>{formatHourLabel(h)}</Text>
-                  <View style={styles.hourLine} />
+          <View style={[styles.mainRow, isNarrow && styles.mainRowNarrow]}>
+            {/* Calendar timeline on the left */}
+            <View style={styles.calendarCol}>
+              <View style={styles.timelineContainer}>
+                <View style={styles.hourGrid}>
+                  {hours.map(h => (
+                    <View key={h} style={styles.hourRow}>
+                      <Text style={styles.hourLabel}>{formatHourLabel(h)}</Text>
+                      <View style={styles.hourLine} />
+                    </View>
+                  ))}
                 </View>
-              ))}
+                <View style={styles.eventsOverlay}>
+                  {todayAvailability.map(item => (
+                    <View
+                      key={item.id}
+                      style={[
+                        styles.eventBlock,
+                        {
+                          top: timeToY(item.startTime!, HOUR_HEIGHT),
+                          height: blockHeight(item.startTime!, item.endTime!, HOUR_HEIGHT),
+                        },
+                      ]}
+                    >
+                      <Text style={styles.eventTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.eventTime}>
+                        {formatTime12hr(item.startTime!)} \u2013 {formatTime12hr(item.endTime!)}
+                      </Text>
+                    </View>
+                  ))}
+                  {showNowToday && (
+                    <View style={[styles.nowLine, { top: nowYToday }]}>
+                      <View style={styles.nowDot} />
+                    </View>
+                  )}
+                </View>
+              </View>
             </View>
-            <View style={styles.eventsOverlay}>
-              {todayAvailability.map(item => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.eventBlock,
-                    {
-                      top: timeToY(item.startTime!, HOUR_HEIGHT),
-                      height: blockHeight(item.startTime!, item.endTime!, HOUR_HEIGHT),
-                    },
-                  ]}
-                >
-                  <Text style={styles.eventTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.eventTime}>
-                    {formatTime12hr(item.startTime!)} \u2013 {formatTime12hr(item.endTime!)}
-                  </Text>
-                </View>
-              ))}
-              {showNowToday && (
-                <View style={[styles.nowLine, { top: nowYToday }]}>
-                  <View style={styles.nowDot} />
-                </View>
-              )}
-            </View>
+
+            {/* Sidebar on the right */}
+            {sidebar}
           </View>
 
-          {/* Classes & Pods */}
-          {todayPods.length > 0 && (
-            <View style={styles.sectionBlock}>
-              <Text style={styles.sectionLabel}>Classes & Pods</Text>
-              <View style={styles.chipRow}>
-                {todayPods.map(pod => (
-                  <View key={pod.id} style={styles.podChip}>
-                    <Users size={12} color={Colors.primary[700]} />
-                    <Text style={styles.podChipText} numberOfLines={1}>{pod.title}</Text>
-                    {pod.courseCode ? <Text style={styles.chipCode}>{pod.courseCode}</Text> : null}
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Tasks */}
-          {todayTasks.length > 0 && (
-            <View style={styles.sectionBlock}>
-              <Text style={styles.sectionLabel}>Tasks</Text>
-              <View style={styles.chipRow}>
-                {todayTasks.map(task => (
-                  <View key={task.id} style={styles.taskChip}>
-                    <CircleCheckBig size={12} color={Colors.warning[600]} />
-                    <Text style={styles.taskChipText} numberOfLines={1}>{task.title}</Text>
-                    {task.courseCode ? <Text style={styles.chipCode}>{task.courseCode}</Text> : null}
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Empty state */}
-          {todayAvailability.length === 0 && todayPods.length === 0 && todayTasks.length === 0 && (
+          {todayAvailability.length === 0 && !hasSideContent && (
             <Text style={styles.emptyText}>Nothing scheduled for today. Enjoy the break or add a study task!</Text>
           )}
         </View>
@@ -222,59 +252,66 @@ export default function CalendarSchedule({ items, loading }: { items: ScheduleIt
             </Pressable>
           </View>
 
-          {/* Day columns */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekScroll}>
-            {weekDates.map(({ day, dayNum, isToday }) => {
-              const dayItems = itemsByDay.get(day) ?? [];
-              const dayAvailability = dayItems.filter(i => i.type === 'availability');
-              const dayPods = dayItems.filter(i => i.type === 'pod-meeting');
-              const dayTasks = dayItems.filter(i => i.type === 'task');
-              return (
-                <View key={day} style={[styles.dayColumn, isToday && styles.dayColumnToday]}>
-                  <View style={styles.dayHeader}>
-                    <Text style={[styles.dayName, isToday && styles.dayNameToday]}>
-                      {day.substring(0, 3)}
-                    </Text>
-                    <View style={[styles.dayNumWrap, isToday && styles.dayNumWrapToday]}>
-                      <Text style={[styles.dayNum, isToday && styles.dayNumToday]}>{dayNum}</Text>
+          <View style={[styles.mainRow, isNarrow && styles.mainRowNarrow]}>
+            {/* Week columns on the left */}
+            <View style={styles.calendarCol}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekScroll}>
+                {weekDates.map(({ day, dayNum, isToday }) => {
+                  const dayItems = itemsByDay.get(day) ?? [];
+                  const dayAvailability = dayItems.filter(i => i.type === 'availability');
+                  const dayPods = dayItems.filter(i => i.type === 'pod-meeting');
+                  const dayTasks = dayItems.filter(i => i.type === 'task');
+                  return (
+                    <View key={day} style={[styles.dayColumn, isToday && styles.dayColumnToday]}>
+                      <View style={styles.dayHeader}>
+                        <Text style={[styles.dayName, isToday && styles.dayNameToday]}>
+                          {day.substring(0, 3)}
+                        </Text>
+                        <View style={[styles.dayNumWrap, isToday && styles.dayNumWrapToday]}>
+                          <Text style={[styles.dayNum, isToday && styles.dayNumToday]}>{dayNum}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.miniTimeline}>
+                        {hours.map(h => (
+                          <View key={h} style={styles.miniHourLine} />
+                        ))}
+                        {dayAvailability.map(item => (
+                          <View
+                            key={item.id}
+                            style={[
+                              styles.miniBlock,
+                              {
+                                top: timeToY(item.startTime!, HOUR_HEIGHT_WEEK),
+                                height: blockHeight(item.startTime!, item.endTime!, HOUR_HEIGHT_WEEK),
+                              },
+                            ]}
+                          />
+                        ))}
+                        {isToday && showNowWeek && (
+                          <View style={[styles.miniNowLine, { top: nowYWeek }]} />
+                        )}
+                      </View>
+                      <View style={styles.dayChips}>
+                        {dayPods.map(p => (
+                          <View key={p.id} style={styles.miniPodChip}>
+                            <Users size={10} color={Colors.primary[700]} />
+                          </View>
+                        ))}
+                        {dayTasks.length > 0 && (
+                          <View style={styles.miniTaskChip}>
+                            <Text style={styles.miniTaskCount}>{dayTasks.length}</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.miniTimeline}>
-                    {hours.map(h => (
-                      <View key={h} style={styles.miniHourLine} />
-                    ))}
-                    {dayAvailability.map(item => (
-                      <View
-                        key={item.id}
-                        style={[
-                          styles.miniBlock,
-                          {
-                            top: timeToY(item.startTime!, HOUR_HEIGHT_WEEK),
-                            height: blockHeight(item.startTime!, item.endTime!, HOUR_HEIGHT_WEEK),
-                          },
-                        ]}
-                      />
-                    ))}
-                    {isToday && showNowWeek && (
-                      <View style={[styles.miniNowLine, { top: nowYWeek }]} />
-                    )}
-                  </View>
-                  <View style={styles.dayChips}>
-                    {dayPods.map(p => (
-                      <View key={p.id} style={styles.miniPodChip}>
-                        <Users size={10} color={Colors.primary[700]} />
-                      </View>
-                    ))}
-                    {dayTasks.length > 0 && (
-                      <View style={styles.miniTaskChip}>
-                        <Text style={styles.miniTaskCount}>{dayTasks.length}</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
-          </ScrollView>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Sidebar stays on the right */}
+            {sidebar}
+          </View>
         </View>
       )}
     </View>
@@ -323,12 +360,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
   },
 
-  /* Today view */
+  /* Date header */
   dateHeader: {
     ...Typography.bodyMedium,
     color: Colors.textSecondary,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
+
+  /* Main row: calendar + sidebar */
+  mainRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  mainRowNarrow: {
+    flexDirection: 'column',
+  },
+  calendarCol: {
+    flex: 1,
+  },
+
+  /* Today timeline */
   timelineContainer: {
     position: 'relative',
     height: TIMELINE_HEIGHT,
@@ -348,9 +399,9 @@ const styles = StyleSheet.create({
   hourLabel: {
     width: LABEL_WIDTH,
     fontFamily: 'Inter-Regular',
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.neutral[400],
-    marginTop: -7,
+    marginTop: -6,
     textAlign: 'right',
     paddingRight: Spacing.sm,
   },
@@ -358,7 +409,6 @@ const styles = StyleSheet.create({
     flex: 1,
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.neutral[200],
-    marginTop: 0,
   },
   eventsOverlay: {
     position: 'absolute',
@@ -374,19 +424,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary[500],
     borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: 3,
     justifyContent: 'center',
   },
   eventTitle: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
     color: Colors.neutral[0],
   },
   eventTime: {
     fontFamily: 'Inter-Regular',
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 9,
+    lineHeight: 13,
     color: 'rgba(255,255,255,0.7)',
     marginTop: 1,
   },
@@ -407,60 +457,71 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
 
-  /* Sections */
-  sectionBlock: {
-    marginTop: Spacing.lg,
+  /* Sidebar */
+  sidebar: {
+    width: SIDEBAR_WIDTH,
+    maxHeight: TIMELINE_HEIGHT,
+    backgroundColor: Colors.neutral[50],
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
   },
-  sectionLabel: {
-    ...Typography.captionMedium,
-    color: Colors.textSecondary,
+  sidebarNarrow: {
+    width: '100%',
+    maxHeight: undefined,
+    marginTop: Spacing.sm,
+  },
+  sidebarSection: {
+    marginBottom: Spacing.md,
+  },
+  sidebarLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: Spacing.sm,
   },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  podChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.primary[50],
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-    maxWidth: 200,
-  },
-  podChipText: {
-    ...Typography.small,
-    color: Colors.primary[700],
-    fontFamily: 'Inter-Medium',
-  },
-  taskChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.warning[50],
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-    maxWidth: 200,
-  },
-  taskChipText: {
-    ...Typography.small,
-    color: Colors.warning[600],
-    fontFamily: 'Inter-Medium',
-  },
-  chipCode: {
-    ...Typography.small,
-    color: Colors.neutral[500],
+  sidebarLabel: {
     fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    color: Colors.textSecondary,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
-  emptyText: {
-    ...Typography.body,
+  sidebarItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    paddingVertical: 5,
+  },
+  sidebarDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primary[400],
+    marginTop: 5,
+  },
+  sidebarItemTitle: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    color: Colors.neutral[800],
+  },
+  sidebarItemSub: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    lineHeight: 14,
+    color: Colors.neutral[400],
+    marginTop: 1,
+  },
+  sidebarEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xl,
+  },
+  sidebarEmptyText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
     color: Colors.neutral[400],
     textAlign: 'center',
-    paddingVertical: Spacing.xl,
   },
 
   /* Week view */
@@ -468,17 +529,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   weekRange: {
     ...Typography.bodyMedium,
     color: Colors.ink,
   },
   weekScroll: {
-    paddingRight: Spacing.lg,
+    paddingRight: Spacing.md,
   },
   dayColumn: {
-    width: 80,
+    width: 76,
     marginRight: 4,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
@@ -505,9 +566,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
   },
   dayNumWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -517,7 +578,7 @@ const styles = StyleSheet.create({
   },
   dayNum: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.ink,
   },
   dayNumToday: {
@@ -553,28 +614,34 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.neutral[200],
-    minHeight: 36,
+    minHeight: 32,
     flexWrap: 'wrap',
   },
   miniPodChip: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: Colors.primary[50],
     alignItems: 'center',
     justifyContent: 'center',
   },
   miniTaskChip: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: Colors.warning[50],
     alignItems: 'center',
     justifyContent: 'center',
   },
   miniTaskCount: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 10,
+    fontSize: 9,
     color: Colors.warning[600],
+  },
+  emptyText: {
+    ...Typography.body,
+    color: Colors.neutral[400],
+    textAlign: 'center',
+    paddingVertical: Spacing.lg,
   },
 });
