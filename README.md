@@ -75,3 +75,6 @@ Migrations in `supabase/migrations/` handle all table creation and seeding autom
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anon API key |
 
 No secret keys are committed to the repository. The anon key is safe for client-side use as it is restricted by Row Level Security policies.
+
+
+
