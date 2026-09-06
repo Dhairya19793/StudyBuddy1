@@ -64,6 +64,7 @@ export default function WorkspaceScreen() {
   const [newCourseIdx, setNewCourseIdx] = useState(0);
   const [newDueDate, setNewDueDate] = useState('');
   const [newNote, setNewNote] = useState('');
+  const [newTasksList, setNewTasksList] = useState('');
 
   // Add task
   const [newTaskText, setNewTaskText] = useState('');
@@ -122,18 +123,34 @@ export default function WorkspaceScreen() {
   const handleCreatePlan = useCallback(async () => {
     if (!newTitle.trim() || courses.length === 0) return;
     const courseId = courses[newCourseIdx % courses.length].id;
-    await createPlan({
+    const planId = await createPlan({
       courseId,
       title: newTitle.trim(),
       dueDate: newDueDate || undefined,
       note: newNote.trim() || undefined,
     });
+
+    // Batch-create tasks from the multi-line input
+    const taskLines = newTasksList
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    for (const line of taskLines) {
+      await addTask(line, courseId, planId);
+    }
+
     setShowCreate(false);
     setNewTitle('');
     setNewDueDate('');
     setNewNote('');
+    setNewTasksList('');
     refetchPlans();
-  }, [newTitle, newCourseIdx, newDueDate, newNote, courses, createPlan, refetchPlans]);
+
+    if (planId) {
+      setActivePlanId(planId);
+      setScreen('detail');
+    }
+  }, [newTitle, newCourseIdx, newDueDate, newNote, newTasksList, courses, createPlan, addTask, refetchPlans]);
 
   const handleAddTask = useCallback(async () => {
     if (!newTaskText.trim() || !activePlan) return;
@@ -510,7 +527,8 @@ export default function WorkspaceScreen() {
       {/* Create Plan Modal */}
       <Modal visible={showCreate} transparent animationType="fade" onRequestClose={() => setShowCreate(false)}>
         <View style={st.modalOverlay}>
-          <View style={[st.modalContent, isWide && { maxWidth: 480 }]}>
+          <ScrollView style={[st.modalScrollOuter, isWide && { maxWidth: 480 }]} contentContainerStyle={st.modalScrollContent} showsVerticalScrollIndicator={false}>
+          <View style={st.modalContentInner}>
             <Text style={st.modalTitle}>New Study Plan</Text>
 
             <Text style={st.fieldLabel}>COURSE</Text>
@@ -567,6 +585,22 @@ export default function WorkspaceScreen() {
               multiline
             />
 
+            <Text style={st.fieldLabel}>STUDY TASKS (ONE PER LINE)</Text>
+            <TextInput
+              style={[st.modalInput, st.tasksInput]}
+              placeholder={"Review chapter 3 notes\nPractice problem set 2\nWatch lecture recordings\nMake flashcards for key terms"}
+              placeholderTextColor={Colors.neutral[400]}
+              value={newTasksList}
+              onChangeText={setNewTasksList}
+              multiline
+              textAlignVertical="top"
+            />
+            {newTasksList.trim().length > 0 && (
+              <Text style={st.taskCountPreview}>
+                {newTasksList.split('\n').filter((l) => l.trim().length > 0).length} task(s) will be created
+              </Text>
+            )}
+
             <View style={st.modalActions}>
               <Pressable style={st.modalCancel} onPress={() => setShowCreate(false)}>
                 <Text style={st.modalCancelText}>Cancel</Text>
@@ -580,6 +614,7 @@ export default function WorkspaceScreen() {
               </Pressable>
             </View>
           </View>
+          </ScrollView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -706,6 +741,9 @@ const st = StyleSheet.create({
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },
+  modalScrollOuter: { maxHeight: '90%', width: '100%', maxWidth: 400, borderRadius: BorderRadius.xl, backgroundColor: Colors.surface, ...Shadows.lg },
+  modalScrollContent: { flexGrow: 1 },
+  modalContentInner: { padding: Spacing.lg },
   modalContent: { backgroundColor: Colors.surface, borderRadius: BorderRadius.xl, padding: Spacing.lg, width: '100%', maxWidth: 400, ...Shadows.lg },
   modalTitle: { fontFamily: 'SourceSerifPro-Bold', fontSize: 20, color: Colors.neutral[900], marginBottom: Spacing.lg },
   fieldLabel: { fontFamily: 'Inter-SemiBold', fontSize: 11, letterSpacing: 0.8, color: Colors.neutral[500], marginBottom: 6, marginTop: Spacing.md },
@@ -723,4 +761,6 @@ const st = StyleSheet.create({
   modalCancelText: { ...Typography.bodySemiBold, color: Colors.neutral[600] },
   modalCreate: { flex: 1, alignItems: 'center', paddingVertical: Spacing.sm + 4, borderRadius: BorderRadius.sm, backgroundColor: FOREST },
   modalCreateText: { ...Typography.bodySemiBold, color: Colors.neutral[0] },
+  tasksInput: { minHeight: 120, paddingTop: Spacing.sm + 2 },
+  taskCountPreview: { fontFamily: 'Inter-Medium', fontSize: 12, color: FOREST, marginTop: 4 },
 });

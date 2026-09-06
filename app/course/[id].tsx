@@ -37,8 +37,10 @@ import {
   useToggleInterest,
   useRequestInterestUsers,
   useCreatePod,
+  useMarkChannelRead,
 } from '@/hooks/useStudyData';
 import { useDemoUser } from '@/contexts/DemoUserContext';
+import { supabase } from '@/lib/supabase';
 
 type Tab = 'chat' | 'requests';
 
@@ -81,14 +83,25 @@ export default function CourseHubScreen() {
   } = useMyInterests();
   const toggleInterest = useToggleInterest();
   const createPod = useCreatePod();
+  const markRead = useMarkChannelRead();
 
-  // refetch study requests + messages when screen regains focus
+  // refetch study requests + messages when screen regains focus; mark channel read
   useFocusEffect(
     useCallback(() => {
       refetchRequests();
       refetchMessages();
       refetchInterests();
-    }, [refetchRequests, refetchMessages, refetchInterests]),
+      // Mark channel as read
+      (async () => {
+        const { data: ch } = await supabase
+          .from('channels')
+          .select('id')
+          .eq('course_id', id)
+          .limit(1)
+          .maybeSingle();
+        if (ch) markRead(ch.id);
+      })();
+    }, [refetchRequests, refetchMessages, refetchInterests, id, markRead]),
   );
 
   // ───────────────────────── handlers ─────────────────────────
@@ -98,8 +111,7 @@ export default function CourseHubScreen() {
     if (!trimmed) return;
     setMessageText('');
     await sendMessage(trimmed);
-    refetchMessages();
-  }, [messageText, sendMessage, refetchMessages]);
+  }, [messageText, sendMessage]);
 
   const handleToggleInterest = useCallback(
     async (requestId: string, alreadyInterested: boolean) => {

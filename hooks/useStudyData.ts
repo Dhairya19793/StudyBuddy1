@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useDemoUser } from '@/contexts/DemoUserContext';
 import type {
@@ -233,25 +233,6 @@ export function useCreateStudyRequest() {
 
       if (error) throw error;
 
-      if (fields.postToHub) {
-        const { data: channel } = await supabase
-          .from('channels')
-          .select('id')
-          .eq('course_id', fields.courseId)
-          .limit(1)
-          .maybeSingle();
-
-        if (channel) {
-          await supabase.from('messages').insert({
-            channel_id: channel.id,
-            author_id: currentUser.id,
-            body: fields.helpNeeded,
-            is_study_request: true,
-            study_request_id: data.id,
-          });
-        }
-      }
-
       return data.id;
     },
     [currentUser.id],
@@ -334,10 +315,25 @@ export function useCourseMessages(courseId: string): {
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
   const refetch = useCallback(() => setTick((t) => t + 1), []);
-  const [channelId, setChannelId] = useState<string | null>(null);
+  const channelIdRef = useRef<string | null>(null);
+
+  const enrichRow = useCallback(
+    (m: any): Message => ({
+      id: m.id,
+      authorName: m.profiles?.name ?? 'Unknown',
+      authorInitials: m.profiles?.initials ?? '?',
+      text: m.body,
+      timestamp: formatTime(m.created_at),
+      isStudyRequest: m.is_study_request,
+      studyRequestId: m.study_request_id,
+      isOwn: m.author_id === currentUser.id,
+    }),
+    [currentUser.id],
+  );
 
   useEffect(() => {
     let cancelled = false;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
     setLoading(true);
 
     (async () => {
@@ -349,7 +345,7 @@ export function useCourseMessages(courseId: string): {
         .maybeSingle();
 
       if (cancelled || !channel) { setData([]); setLoading(false); return; }
-      setChannelId(channel.id);
+      channelIdRef.current = channel.id;
 
       const { data: msgs } = await supabase
         .from('messages')
@@ -359,38 +355,53 @@ export function useCourseMessages(courseId: string): {
 
       if (cancelled || !msgs) return;
 
-      const enriched: Message[] = msgs.map((m: any) => ({
-        id: m.id,
-        authorName: m.profiles?.name ?? 'Unknown',
-        authorInitials: m.profiles?.initials ?? '?',
-        text: m.body,
-        timestamp: formatTime(m.created_at),
-        isStudyRequest: m.is_study_request,
-        studyRequestId: m.study_request_id,
-        isOwn: m.author_id === currentUser.id,
-      }));
+      const enriched: Message[] = msgs.map((m: any) => enrichRow(m));
 
       if (!cancelled) {
         setData(enriched);
         setLoading(false);
       }
+
+      if (!cancelled) {
+        realtimeChannel = supabase
+          .channel(`course-messages-${courseId}`)
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'messages', filter: `channel_id=eq.${channel.id}` },
+            async (payload) => {
+              const newRow = payload.new as any;
+              const { data: msgFull } = await supabase
+                .from('messages')
+                .select('*, profiles!messages_author_id_fkey(name, initials)')
+                .eq('id', newRow.id)
+                .single();
+              if (!msgFull) return;
+              const newMessage = enrichRow(msgFull);
+              setData((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
+            },
+          )
+          .subscribe();
+      }
     })();
 
-    return () => { cancelled = true; };
-  }, [courseId, currentUser.id, tick]);
+    return () => {
+      cancelled = true;
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+    };
+  }, [courseId, currentUser.id, tick, enrichRow]);
 
   const sendMessage = useCallback(
     async (text: string) => {
-      if (!channelId) return;
+      const chId = channelIdRef.current;
+      if (!chId) return;
       await supabase.from('messages').insert({
-        channel_id: channelId,
+        channel_id: chId,
         author_id: currentUser.id,
         body: text,
         is_study_request: false,
       });
-      refetch();
     },
-    [channelId, currentUser.id, refetch],
+    [currentUser.id],
   );
 
   return { data, loading, refetch, sendMessage };
@@ -1331,6 +1342,212 @@ export function useSaveAvailabilityBlocks() {
       }));
 
       await supabase.from('availability_blocks').insert(rows);
+    },
+    [currentUser.id],
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// CONVERSATIONS (Messages inbox)
+// ────────────────────────────────────────────────────────────
+
+export interface Conversation {
+  channelId: string;
+  name: string;
+  type: 'course' | 'pod';
+  entityId: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  lastMessageAt?: string;
+  unreadCount: number;
+  initials: string;
+  color: string;
+}
+
+export function useConversations(): {
+  data: Conversation[];
+  loading: boolean;
+  totalUnread: number;
+  refetch: () => void;
+} {
+  const { currentUser } = useDemoUser();
+  const [data, setData] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      // 1. Get all course memberships
+      const { data: courseMemberships } = await supabase
+        .from('course_members')
+        .select('course_id')
+        .eq('profile_id', currentUser.id);
+
+      // 2. Get all pod memberships
+      const { data: podMemberships } = await supabase
+        .from('pod_members')
+        .select('pod_id')
+        .eq('profile_id', currentUser.id);
+
+      if (cancelled) return;
+
+      const courseIds = (courseMemberships ?? []).map((m: any) => m.course_id);
+      const podIds = (podMemberships ?? []).map((m: any) => m.pod_id);
+
+      // 3. Get all channels for these courses and pods
+      let allChannels: any[] = [];
+      if (courseIds.length > 0) {
+        const { data: courseChannels } = await supabase
+          .from('channels')
+          .select('id, course_id, pod_id, name')
+          .in('course_id', courseIds);
+        allChannels = allChannels.concat(courseChannels ?? []);
+      }
+      if (podIds.length > 0) {
+        const { data: podChannels } = await supabase
+          .from('channels')
+          .select('id, course_id, pod_id, name')
+          .in('pod_id', podIds);
+        allChannels = allChannels.concat(podChannels ?? []);
+      }
+
+      if (cancelled) return;
+      if (allChannels.length === 0) { setData([]); setLoading(false); return; }
+
+      const channelIds = allChannels.map((c) => c.id);
+
+      // 4. Get last read timestamps
+      const { data: reads } = await supabase
+        .from('channel_reads')
+        .select('channel_id, last_read_at')
+        .eq('profile_id', currentUser.id)
+        .in('channel_id', channelIds);
+
+      const readMap = new Map<string, string>();
+      (reads ?? []).forEach((r: any) => readMap.set(r.channel_id, r.last_read_at));
+
+      // 5. Get course and pod details
+      const courseMap = new Map<string, any>();
+      const podMap = new Map<string, any>();
+
+      if (courseIds.length > 0) {
+        const { data: courses } = await supabase.from('courses').select('*').in('id', courseIds);
+        (courses ?? []).forEach((c: any) => courseMap.set(c.id, c));
+      }
+      if (podIds.length > 0) {
+        const { data: pods } = await supabase.from('pods').select('*, courses!pods_course_id_fkey(code)').in('id', podIds);
+        (pods ?? []).forEach((p: any) => podMap.set(p.id, p));
+      }
+
+      if (cancelled) return;
+
+      // 6. Build conversations
+      const conversations: Conversation[] = await Promise.all(
+        allChannels.map(async (ch) => {
+          const isCourse = !!ch.course_id;
+          const entityId = isCourse ? ch.course_id : ch.pod_id;
+
+          // Get last message
+          const { data: lastMsgs } = await supabase
+            .from('messages')
+            .select('body, created_at')
+            .eq('channel_id', ch.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          const lastMsg = lastMsgs?.[0];
+
+          // Get unread count
+          const lastRead = readMap.get(ch.id);
+          let unreadCount = 0;
+          if (lastRead) {
+            const { count } = await supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('channel_id', ch.id)
+              .gt('created_at', lastRead)
+              .neq('author_id', currentUser.id);
+            unreadCount = count ?? 0;
+          } else if (lastMsg) {
+            const { count } = await supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('channel_id', ch.id)
+              .neq('author_id', currentUser.id);
+            unreadCount = count ?? 0;
+          }
+
+          if (isCourse) {
+            const course = courseMap.get(entityId);
+            return {
+              channelId: ch.id,
+              name: course ? `${course.code} - ${course.name}` : 'Course Chat',
+              type: 'course' as const,
+              entityId,
+              lastMessage: lastMsg?.body,
+              lastMessageTime: lastMsg ? timeAgo(lastMsg.created_at) : undefined,
+              lastMessageAt: lastMsg?.created_at,
+              unreadCount,
+              initials: course?.code?.substring(0, 2) ?? 'CC',
+              color: course?.color ?? '#2F6B45',
+            };
+          } else {
+            const pod = podMap.get(entityId);
+            return {
+              channelId: ch.id,
+              name: pod?.name ?? 'Pod Chat',
+              type: 'pod' as const,
+              entityId,
+              lastMessage: lastMsg?.body,
+              lastMessageTime: lastMsg ? timeAgo(lastMsg.created_at) : undefined,
+              lastMessageAt: lastMsg?.created_at,
+              unreadCount,
+              initials: pod?.name?.substring(0, 2)?.toUpperCase() ?? 'PC',
+              color: '#2F6B45',
+            };
+          }
+        }),
+      );
+
+      if (!cancelled) {
+        conversations.sort((a, b) => {
+          if (!a.lastMessageAt && !b.lastMessageAt) return 0;
+          if (!a.lastMessageAt) return 1;
+          if (!b.lastMessageAt) return -1;
+          return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+        });
+        setData(conversations);
+        setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentUser.id, tick]);
+
+  const totalUnread = useMemo(() => data.reduce((s, c) => s + c.unreadCount, 0), [data]);
+
+  return { data, loading, totalUnread, refetch };
+}
+
+// ────────────────────────────────────────────────────────────
+// MARK CHANNEL AS READ
+// ────────────────────────────────────────────────────────────
+
+export function useMarkChannelRead() {
+  const { currentUser } = useDemoUser();
+
+  return useCallback(
+    async (channelId: string) => {
+      await supabase
+        .from('channel_reads')
+        .upsert(
+          { profile_id: currentUser.id, channel_id: channelId, last_read_at: new Date().toISOString() },
+          { onConflict: 'profile_id,channel_id' },
+        );
     },
     [currentUser.id],
   );

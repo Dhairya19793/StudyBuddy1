@@ -38,7 +38,7 @@ import {
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import type { PeerPod, Message, PodMember } from '@/constants/mockData';
-import { usePods, usePodMessages, usePodTasks } from '@/hooks/useStudyData';
+import { usePods, usePodMessages, usePodTasks, useMarkChannelRead } from '@/hooks/useStudyData';
 
 let ImagePicker: typeof import('expo-image-picker') | null = null;
 if (Platform.OS !== 'web') {
@@ -81,6 +81,7 @@ export default function PodDetailScreen() {
   const pod = useMemo(() => allPods.find((p) => p.id === id) ?? null, [allPods, id]);
 
   const { data: messages, sendMessage, togglePin, markResolved } = usePodMessages(id ?? '');
+  const markRead = useMarkChannelRead();
   const { data: podTasks, addTask, toggleTask } = usePodTasks(id ?? '');
 
   const [activeTab, setActiveTab] = useState<Tab>('Chat');
@@ -95,6 +96,19 @@ export default function PodDetailScreen() {
   const [showPinned, setShowPinned] = useState(true);
 
   const chatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    // Mark pod channel as read on mount
+    (async () => {
+      const { data: ch } = await (await import('@/lib/supabase')).supabase
+        .from('channels')
+        .select('id')
+        .eq('pod_id', id)
+        .limit(1)
+        .maybeSingle();
+      if (ch) markRead(ch.id);
+    })();
+  }, [id, markRead]);
 
   useEffect(() => {
     if (messages.length > 0) {

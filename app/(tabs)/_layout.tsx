@@ -1,19 +1,33 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, Platform, useWindowDimensions } from 'react-native';
-import { BookOpen, Users, ClipboardList, User, Home } from 'lucide-react-native';
+import { StyleSheet, Platform, useWindowDimensions, View, Text } from 'react-native';
+import { BookOpen, Users, ClipboardList, User, Home, MessageCircle } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius } from '@/constants/theme';
+import { useConversations } from '@/hooks/useStudyData';
 
 const TAB_ITEMS = [
   { name: 'index', title: 'Home', Icon: Home },
   { name: 'courses', title: 'Courses', Icon: BookOpen },
+  { name: 'messages', title: 'Messages', Icon: MessageCircle },
   { name: 'pods', title: 'Pods', Icon: Users },
   { name: 'workspace', title: 'Solo', Icon: ClipboardList },
   { name: 'profile', title: 'Profile', Icon: User },
 ] as const;
 
+function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <View style={styles.unreadBadge}>
+      <Text style={styles.unreadBadgeText}>
+        {count > 99 ? '99+' : count}
+      </Text>
+    </View>
+  );
+}
+
 export default function TabLayout() {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= 900;
+  const { totalUnread } = useConversations();
 
   return (
     <Tabs
@@ -35,7 +49,10 @@ export default function TabLayout() {
           options={{
             title: tab.title,
             tabBarIcon: ({ color, size }) => (
-              <tab.Icon size={isDesktop ? 17 : size} color={color} strokeWidth={2} />
+              <View>
+                <tab.Icon size={isDesktop ? 17 : size} color={color} strokeWidth={2} />
+                {tab.name === 'messages' && <UnreadBadge count={totalUnread} />}
+              </View>
             ),
           }}
         />
@@ -78,5 +95,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: BorderRadius.md,
     flexDirection: 'row',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    backgroundColor: '#E53E3E',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  unreadBadgeText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    color: '#FFFFFF',
   },
 });
