@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -18,10 +18,11 @@ import {
   Clock,
   Video,
   MapPin,
+  LogOut,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import { PeerPod } from '@/constants/mockData';
-import { usePods } from '@/hooks/useStudyData';
+import { usePods, useLeavePod } from '@/hooks/useStudyData';
 
 /* ── Colour tokens ──────────────────────────────── */
 const FOREST_GREEN = '#2F6B45';
@@ -47,6 +48,25 @@ export default function PodsScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { data: pods, loading, refetch: refetchPods } = usePods();
+  const leavePod = useLeavePod();
+  const [leavingId, setLeavingId] = useState<string | null>(null);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+
+  const handleLeavePod = useCallback(
+    async (podId: string, podName: string) => {
+      setLeaveError(null);
+      setLeavingId(podId);
+      try {
+        await leavePod(podId);
+        refetchPods();
+      } catch {
+        setLeaveError(`Could not leave "${podName}". Please try again.`);
+      } finally {
+        setLeavingId(null);
+      }
+    },
+    [leavePod, refetchPods],
+  );
 
   useFocusEffect(
     useCallback(() => { refetchPods(); }, [refetchPods]),
@@ -189,7 +209,21 @@ export default function PodsScreen() {
               <Text style={styles.courseBadgeText}>{item.courseCode}</Text>
             </View>
           </View>
-          <ChevronRight size={18} color={Colors.neutral[400]} />
+          <View style={styles.cardHeaderRight}>
+            <Pressable
+              onPress={(e) => { e.stopPropagation(); handleLeavePod(item.id, item.name); }}
+              disabled={leavingId === item.id}
+              style={({ pressed }) => [styles.leaveBtn, pressed && styles.leaveBtnPressed]}
+              hitSlop={8}
+            >
+              {leavingId === item.id ? (
+                <ActivityIndicator size={14} color={Colors.error[500]} />
+              ) : (
+                <LogOut size={15} color={Colors.error[500]} />
+              )}
+            </Pressable>
+            <ChevronRight size={18} color={Colors.neutral[400]} />
+          </View>
         </View>
 
         {/* ── Topic ────────────────────────────────── */}
@@ -258,6 +292,7 @@ export default function PodsScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Peer Pods</Text>
           <Text style={styles.headerSubtitle}>Your private study groups</Text>
+          {leaveError ? <Text style={styles.leaveError}>{leaveError}</Text> : null}
         </View>
 
         {/* Pod list */}
@@ -357,6 +392,25 @@ const styles = StyleSheet.create({
   },
   cardPressed: {
     opacity: 0.75,
+  },
+
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  leaveBtn: {
+    padding: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.error[50],
+  },
+  leaveBtnPressed: {
+    opacity: 0.6,
+  },
+  leaveError: {
+    ...Typography.caption,
+    color: Colors.error[600],
+    marginTop: Spacing.xs,
   },
 
   /* ── Card header row ─────────────────────────── */

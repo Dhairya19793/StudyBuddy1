@@ -569,6 +569,25 @@ export function usePods(): { data: PeerPod[]; loading: boolean; refetch: () => v
 }
 
 // ────────────────────────────────────────────────────────────
+// LEAVE POD
+// ────────────────────────────────────────────────────────────
+
+export function useLeavePod() {
+  const { currentUser } = useDemoUser();
+
+  return useCallback(
+    async (podId: string) => {
+      await supabase
+        .from('pod_members')
+        .delete()
+        .eq('pod_id', podId)
+        .eq('profile_id', currentUser.id);
+    },
+    [currentUser.id],
+  );
+}
+
+// ────────────────────────────────────────────────────────────
 // POD MESSAGES  (with sendMessage + Realtime)
 // ────────────────────────────────────────────────────────────
 
@@ -1341,6 +1360,12 @@ export function useRequestInterestUsers(requestId: string): {
     setLoading(true);
 
     (async () => {
+      if (!requestId) {
+        setData([]);
+        setLoading(false);
+        return;
+      }
+
       const { data: interests } = await supabase
         .from('request_interests')
         .select('profiles!request_interests_profile_id_fkey(id, name, initials)')

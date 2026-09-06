@@ -35,10 +35,11 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  LogOut,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import type { PeerPod, Message, PodMember } from '@/constants/mockData';
-import { usePods, usePodMessages, usePodTasks, useMarkChannelRead } from '@/hooks/useStudyData';
+import { usePods, usePodMessages, usePodTasks, useMarkChannelRead, useLeavePod } from '@/hooks/useStudyData';
 
 let ImagePicker: typeof import('expo-image-picker') | null = null;
 if (Platform.OS !== 'web') {
@@ -94,6 +95,23 @@ export default function PodDetailScreen() {
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showPinned, setShowPinned] = useState(true);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+
+  const leavePod = useLeavePod();
+
+  const handleLeavePod = useCallback(async () => {
+    if (!id) return;
+    setLeaveError(null);
+    setLeaving(true);
+    try {
+      await leavePod(id);
+      router.back();
+    } catch {
+      setLeaveError('Could not leave this pod. Please try again.');
+      setLeaving(false);
+    }
+  }, [id, leavePod, router]);
 
   const chatListRef = useRef<FlatList>(null);
 
@@ -496,6 +514,21 @@ export default function PodDetailScreen() {
         </View>
         <Text style={s.infoMembers}>{pod.members.length} members</Text>
       </View>
+      {leaveError ? <Text style={s.leaveErrorText}>{leaveError}</Text> : null}
+      <Pressable
+        onPress={handleLeavePod}
+        disabled={leaving}
+        style={({ pressed }) => [s.leavePodBtn, pressed && s.leavePodBtnPressed]}
+      >
+        {leaving ? (
+          <ActivityIndicator size={15} color={Colors.error[600]} />
+        ) : (
+          <>
+            <LogOut size={15} color={Colors.error[600]} />
+            <Text style={s.leavePodBtnText}>Leave Pod</Text>
+          </>
+        )}
+      </Pressable>
     </View>
   );
 
@@ -525,7 +558,21 @@ export default function PodDetailScreen() {
         <Text style={s.headerTitle} numberOfLines={1}>{pod.name}</Text>
         <View style={s.headerPill}><Text style={s.headerPillText}>{pod.courseCode}</Text></View>
       </View>
-      <View style={s.headerRight}><Users size={16} color={Colors.neutral[500]} /><Text style={s.headerCount}>{pod.members.length}</Text></View>
+      <View style={s.headerRight}>
+        <Users size={16} color={Colors.neutral[500]} /><Text style={s.headerCount}>{pod.members.length}</Text>
+        <Pressable
+          onPress={handleLeavePod}
+          disabled={leaving}
+          style={({ pressed }) => [s.headerLeaveBtn, pressed && { opacity: 0.6 }]}
+          hitSlop={8}
+        >
+          {leaving ? (
+            <ActivityIndicator size={15} color={Colors.error[600]} />
+          ) : (
+            <LogOut size={18} color={Colors.error[600]} />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 
@@ -722,4 +769,11 @@ const s = StyleSheet.create({
   desktopRight: { flex: 2, paddingTop: Spacing.md },
   sidebarHeading: { fontFamily: 'Inter-SemiBold', fontSize: 13, letterSpacing: 0.8, color: Colors.neutral[500], textTransform: 'uppercase', paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
   sidebarDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.neutral[200], marginVertical: Spacing.md, marginHorizontal: Spacing.md },
+
+  // Leave pod
+  leavePodBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: Colors.error[50], borderWidth: 1, borderColor: Colors.error[200], marginTop: Spacing.sm },
+  leavePodBtnPressed: { opacity: 0.6 },
+  leavePodBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: Colors.error[600] },
+  leaveErrorText: { ...Typography.caption, color: Colors.error[600], marginTop: Spacing.xs },
+  headerLeaveBtn: { padding: 6, borderRadius: BorderRadius.full, backgroundColor: Colors.error[50], marginLeft: Spacing.xs },
 });
