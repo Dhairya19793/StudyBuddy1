@@ -33,7 +33,7 @@ export default function CoursesScreen() {
   const { width } = useWindowDimensions();
   const { data: courses, loading } = useCourses();
 
-  const isWideScreen = width > 768;
+  const isWideScreen = width > 900;
   const numColumns = isWideScreen ? 2 : 1;
 
   const filteredCourses = useMemo(() => {

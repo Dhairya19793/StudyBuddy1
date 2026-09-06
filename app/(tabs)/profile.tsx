@@ -28,6 +28,11 @@ import { useDemoUser } from '@/contexts/DemoUserContext';
 import { useCourses, usePods, useSoloTasks } from '@/hooks/useStudyData';
 import UserSwitcher from '@/components/UserSwitcher';
 
+/* ── Design tokens ─────────────────────────────────────────────────── */
+const FOREST = '#2D5F3A';
+const GOLD = '#C9A93D';
+const OFF_WHITE = '#F8F7F5';
+
 /* ------------------------------------------------------------------ */
 /*  Small reusable pieces                                             */
 /* ------------------------------------------------------------------ */
@@ -39,6 +44,24 @@ function PrivacyItem({ label }: { label: string }) {
         <Text style={styles.checkMark}>✓</Text>
       </View>
       <Text style={styles.privacyText}>{label}</Text>
+    </View>
+  );
+}
+
+function SocialRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.socialItem}>
+      <View style={styles.socialIconWrap}>{icon}</View>
+      <Text style={styles.socialLabel}>{label}</Text>
+      <Text style={styles.socialValue}>{value}</Text>
     </View>
   );
 }
@@ -78,8 +101,10 @@ export default function ProfileScreen() {
 
         {/* ──────────────── Avatar + identity ──────────────── */}
         <View style={styles.identitySection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitials}>{currentUser.initials}</Text>
+          <View style={styles.avatarRing}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarInitials}>{currentUser.initials}</Text>
+            </View>
           </View>
 
           <Text style={styles.name}>{currentUser.name}</Text>
@@ -100,7 +125,12 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <View style={{ marginTop: Spacing.md }}>
+          {/* Demo Mode switcher */}
+          <View style={styles.demoModeWrap}>
+            <View style={styles.demoModeLabelRow}>
+              <View style={styles.demoDot} />
+              <Text style={styles.demoModeText}>Demo Mode</Text>
+            </View>
             <UserSwitcher />
           </View>
         </View>
@@ -108,19 +138,25 @@ export default function ProfileScreen() {
         {/* ──────────────── Stats cards ──────────────── */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <BookOpen size={20} color={Colors.primary[500]} />
+            <View style={styles.statIconWrap}>
+              <BookOpen size={18} color={GOLD} />
+            </View>
             <Text style={styles.statCount}>{courseCount}</Text>
             <Text style={styles.statLabel}>Courses</Text>
           </View>
 
           <View style={styles.statCard}>
-            <Users size={20} color={Colors.primary[500]} />
+            <View style={styles.statIconWrap}>
+              <Users size={18} color={GOLD} />
+            </View>
             <Text style={styles.statCount}>{podCount}</Text>
             <Text style={styles.statLabel}>Pods</Text>
           </View>
 
           <View style={styles.statCard}>
-            <ClipboardList size={20} color={Colors.primary[500]} />
+            <View style={styles.statIconWrap}>
+              <ClipboardList size={18} color={GOLD} />
+            </View>
             <Text style={styles.statCount}>{taskCount}</Text>
             <Text style={styles.statLabel}>Tasks</Text>
           </View>
@@ -133,21 +169,21 @@ export default function ProfileScreen() {
           {hasSocialLinks ? (
             <>
               {hasInstagram && (
-                <View style={styles.socialItem}>
-                  <Instagram size={18} color={Colors.neutral[600]} />
-                  <Text style={styles.socialLabel}>Instagram</Text>
-                  <Text style={styles.socialValue}>{currentUser.instagram}</Text>
-                </View>
+                <SocialRow
+                  icon={<Instagram size={16} color={Colors.secondary[500]} />}
+                  label="Instagram"
+                  value={currentUser.instagram!}
+                />
               )}
 
               {hasInstagram && hasDiscord && <View style={styles.divider} />}
 
               {hasDiscord && (
-                <View style={styles.socialItem}>
-                  <MessageCircle size={18} color={Colors.neutral[600]} />
-                  <Text style={styles.socialLabel}>Discord</Text>
-                  <Text style={styles.socialValue}>{currentUser.discord}</Text>
-                </View>
+                <SocialRow
+                  icon={<MessageCircle size={16} color={Colors.secondary[500]} />}
+                  label="Discord"
+                  value={currentUser.discord!}
+                />
               )}
             </>
           ) : (
@@ -181,9 +217,11 @@ export default function ProfileScreen() {
               pressed && styles.menuItemPressed,
             ]}
           >
-            <Bell size={18} color={Colors.neutral[600]} />
+            <View style={styles.menuIconWrap}>
+              <Bell size={17} color={Colors.neutral[600]} />
+            </View>
             <Text style={styles.menuLabel}>Notifications</Text>
-            <ChevronRight size={18} color={Colors.neutral[400]} />
+            <ChevronRight size={17} color={Colors.neutral[300]} />
           </Pressable>
 
           <View style={styles.divider} />
@@ -194,9 +232,11 @@ export default function ProfileScreen() {
               pressed && styles.menuItemPressed,
             ]}
           >
-            <Settings size={18} color={Colors.neutral[600]} />
+            <View style={styles.menuIconWrap}>
+              <Settings size={17} color={Colors.neutral[600]} />
+            </View>
             <Text style={styles.menuLabel}>Account Settings</Text>
-            <ChevronRight size={18} color={Colors.neutral[400]} />
+            <ChevronRight size={17} color={Colors.neutral[300]} />
           </Pressable>
 
           <View style={styles.divider} />
@@ -204,10 +244,12 @@ export default function ProfileScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.menuItem,
-              pressed && styles.menuItemPressed,
+              pressed && styles.menuItemPressedDanger,
             ]}
           >
-            <LogOut size={18} color={Colors.error[500]} />
+            <View style={styles.menuIconWrapDanger}>
+              <LogOut size={17} color={Colors.error[500]} />
+            </View>
             <Text style={[styles.menuLabel, styles.menuLabelDanger]}>
               Sign Out
             </Text>
@@ -228,7 +270,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: OFF_WHITE,
   },
   scroll: {
     paddingHorizontal: Spacing.lg,
@@ -238,18 +280,30 @@ const styles = StyleSheet.create({
   /* Header */
   header: {
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingBottom: Spacing.xs,
   },
   headerTitle: {
-    ...Typography.h1,
-    color: Colors.primary[500],
+    fontFamily: 'SourceSerifPro-Bold',
+    fontSize: 28,
+    lineHeight: 34,
+    color: FOREST,
   },
 
   /* Identity */
   identitySection: {
     alignItems: 'center',
     paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  avatarRing: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 3,
+    borderColor: GOLD,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
   },
   avatar: {
     width: 80,
@@ -258,7 +312,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary[500],
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing.md,
   },
   avatarInitials: {
     fontFamily: 'Inter-SemiBold',
@@ -303,6 +356,32 @@ const styles = StyleSheet.create({
     color: Colors.primary[500],
   },
 
+  /* Demo Mode */
+  demoModeWrap: {
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  demoModeLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  demoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.secondary[400],
+  },
+  demoModeText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 11,
+    lineHeight: 14,
+    color: Colors.neutral[400],
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+
   /* Stats */
   statsRow: {
     flexDirection: 'row',
@@ -315,14 +394,23 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     paddingVertical: Spacing.md,
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
     ...Shadows.sm,
   },
+  statIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.secondary[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   statCount: {
-    ...Typography.bodySemiBold,
-    fontSize: 18,
-    color: Colors.neutral[900],
-    marginTop: 4,
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 20,
+    lineHeight: 26,
+    color: FOREST,
   },
   statLabel: {
     ...Typography.caption,
@@ -346,7 +434,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   sectionTitle: {
-    ...Typography.bodySemiBold,
+    fontFamily: 'SourceSerifPro-SemiBold',
+    fontSize: 16,
+    lineHeight: 22,
     color: Colors.neutral[900],
     marginBottom: 0,
   },
@@ -355,8 +445,16 @@ const styles = StyleSheet.create({
   socialItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
     gap: Spacing.sm,
+  },
+  socialIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.secondary[50],
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   socialLabel: {
     ...Typography.bodyMedium,
@@ -379,6 +477,7 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.neutral[200],
+    marginHorizontal: Spacing.xs,
   },
 
   /* Privacy */
@@ -386,20 +485,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    paddingVertical: 6,
+    paddingVertical: 7,
   },
   checkCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.primary[50],
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.primary[100],
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkMark: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 11,
-    color: Colors.primary[500],
+    fontSize: 12,
+    color: Colors.primary[600],
     marginTop: -1,
   },
   privacyText: {
@@ -413,10 +512,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
     gap: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    marginHorizontal: -Spacing.xs,
   },
   menuItemPressed: {
-    opacity: 0.6,
+    backgroundColor: Colors.neutral[50],
+  },
+  menuItemPressedDanger: {
+    backgroundColor: Colors.error[50],
+  },
+  menuIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.neutral[100],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuIconWrapDanger: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.error[50],
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   menuLabel: {
     ...Typography.bodyMedium,

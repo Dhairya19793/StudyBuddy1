@@ -4,8 +4,7 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
-  Platform,
+  Pressable,
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
@@ -19,11 +18,19 @@ import {
   ChevronRight,
   MessageSquare,
   Heart,
+  Inbox,
+  FolderOpen,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import { useDemoUser } from '@/contexts/DemoUserContext';
 import { useCourses, useStudyRequests, usePods, useSoloTasks } from '@/hooks/useStudyData';
 import UserSwitcher from '@/components/UserSwitcher';
+
+/* ─── design tokens ─────────────────────────────────────── */
+
+const FOREST = '#2D5F3A';
+const GOLD = '#C9A93D';
+const OFF_WHITE = '#F8F7F5';
 
 /* ─── helpers ────────────────────────────────────────────── */
 
@@ -39,35 +46,41 @@ function getGreeting(): string {
 export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isWide = width > 768;
+  const isWide = width > 900;
 
   const { currentUser } = useDemoUser();
   const { data: courses, loading: coursesLoading, refetch: refetchCourses } = useCourses();
   const { data: studyRequests, refetch: refetchRequests } = useStudyRequests();
+  const { data: pods, refetch: refetchPods } = usePods();
+  const { data: soloTasks } = useSoloTasks();
 
   useFocusEffect(
     useCallback(() => {
       refetchCourses();
       refetchRequests();
-    }, [refetchCourses, refetchRequests]),
+      refetchPods();
+    }, [refetchCourses, refetchRequests, refetchPods]),
   );
-  const { data: pods } = usePods();
-  const { data: soloTasks } = useSoloTasks();
 
   const firstName = currentUser.name.split(' ')[0];
   const activePods = pods.length;
   const tasksDue = soloTasks.filter((t) => !t.completed).length;
   const courseCount = courses.length;
 
+  /* ── loading state ─────────────────────────────────── */
+
   if (coursesLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={Colors.primary[500]} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={FOREST} />
+          <Text style={styles.loadingText}>Loading your dashboard…</Text>
         </View>
       </SafeAreaView>
     );
   }
+
+  /* ── main render ───────────────────────────────────── */
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -82,185 +95,150 @@ export default function HomeScreen() {
             <Text style={styles.greeting}>
               {getGreeting()}, {firstName}
             </Text>
-            <Text style={styles.subtitle}>Ready to study?</Text>
+            <Text style={styles.subtitle}>Let's make today count 🌿</Text>
           </View>
 
           <UserSwitcher />
         </View>
 
-        {/* ── QUICK STATS ────────────────────────────────── */}
+        {/* ── QUICK STATS (full width on desktop) ────────── */}
         <View style={[styles.statsRow, isWide && styles.statsRowWide]}>
           <StatCard
-            icon={<BookOpen size={18} color={Colors.primary[500]} />}
+            icon={<BookOpen size={18} color={GOLD} />}
             value={`${courseCount}`}
             label="Courses"
             isWide={isWide}
           />
           <StatCard
-            icon={<Users size={18} color={Colors.primary[500]} />}
+            icon={<Users size={18} color={GOLD} />}
             value={`${activePods}`}
             label="Active Pods"
             isWide={isWide}
           />
           <StatCard
-            icon={<ClipboardList size={18} color={Colors.primary[500]} />}
+            icon={<ClipboardList size={18} color={GOLD} />}
             value={`${tasksDue}`}
             label="Tasks Due"
             isWide={isWide}
           />
         </View>
 
-        {/* ── CREATE STUDY REQUEST CTA ──────────────────── */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.createRequestCta}
-          onPress={() => router.push('/study-request' as any)}
-        >
-          <View style={styles.createRequestIcon}>
-            <Plus size={20} color={Colors.neutral[0]} />
-          </View>
-          <View style={styles.createRequestText}>
-            <Text style={styles.createRequestTitle}>Create Study Request</Text>
-            <Text style={styles.createRequestSubtitle}>Find classmates to study with</Text>
-          </View>
-          <ChevronRight size={20} color={Colors.primary[400]} />
-        </TouchableOpacity>
-
-        {/* ── RECENT STUDY REQUESTS ──────────────────────── */}
-        <SectionHeader
-          title="Recent Study Requests"
-          onSeeAll={() => router.push('/courses' as any)}
-        />
-
-        <View style={isWide ? styles.requestsGrid : undefined}>
-          {studyRequests.slice(0, isWide ? 4 : 3).map((req) => (
-            <TouchableOpacity
-              key={req.id}
-              activeOpacity={0.7}
-              style={[
-                styles.requestCard,
-                isWide && styles.requestCardWide,
+        {/* ── 2-column wrapper on desktop ────────────────── */}
+        <View style={isWide ? styles.twoColWrapper : undefined}>
+          {/* LEFT COLUMN (or full-width on mobile) */}
+          <View style={isWide ? styles.leftCol : undefined}>
+            {/* ── CREATE STUDY REQUEST CTA ──────────────── */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.createRequestCta,
+                pressed && styles.createRequestCtaPressed,
               ]}
-              onPress={() => router.push(`/course/${req.courseId}` as any)}
+              onPress={() => router.push('/study-request' as any)}
             >
-              <View style={styles.requestTopRow}>
-                <View style={styles.courseCodeBadge}>
-                  <Text style={styles.courseCodeText}>{req.courseCode}</Text>
-                </View>
-                <Text style={styles.requestTime}>{req.createdAt}</Text>
+              <View style={styles.createRequestIcon}>
+                <Plus size={20} color={Colors.neutral[0]} />
               </View>
-
-              <Text style={styles.requestTopic} numberOfLines={1}>
-                {req.topic}
-              </Text>
-
-              <View style={styles.requestMeta}>
-                <Text style={styles.requestAuthor}>{req.authorName}</Text>
-
-                <View style={styles.interestedBadge}>
-                  <Heart
-                    size={12}
-                    color={Colors.primary[500]}
-                    fill={Colors.primary[100]}
-                  />
-                  <Text style={styles.interestedText}>
-                    {req.interestedCount} interested
-                  </Text>
-                </View>
+              <View style={styles.createRequestText}>
+                <Text style={styles.createRequestTitle}>Create Study Request</Text>
+                <Text style={styles.createRequestSubtitle}>
+                  Find classmates to study with
+                </Text>
               </View>
-            </TouchableOpacity>
-          ))}
+              <ChevronRight size={20} color={Colors.neutral[0]} />
+            </Pressable>
+
+            {/* ── RECENT STUDY REQUESTS ─────────────────── */}
+            <SectionHeader
+              title="Recent Study Requests"
+              onSeeAll={() => router.push('/courses' as any)}
+            />
+
+            {studyRequests.length === 0 ? (
+              <EmptyState
+                icon={<Inbox size={32} color={Colors.neutral[300]} />}
+                message="No study requests yet — create one above!"
+              />
+            ) : (
+              <View style={isWide ? styles.requestsGrid : undefined}>
+                {studyRequests.slice(0, isWide ? 4 : 3).map((req) => (
+                  <Pressable
+                    key={req.id}
+                    style={({ pressed }) => [
+                      styles.requestCard,
+                      isWide && styles.requestCardWide,
+                      pressed && styles.cardPressed,
+                    ]}
+                    onPress={() => router.push(`/course/${req.courseId}` as any)}
+                  >
+                    <View style={styles.requestTopRow}>
+                      <View style={styles.courseCodeBadge}>
+                        <Text style={styles.courseCodeText}>{req.courseCode}</Text>
+                      </View>
+                      <Text style={styles.requestTime}>{req.createdAt}</Text>
+                    </View>
+
+                    <Text style={styles.requestTopic} numberOfLines={1}>
+                      {req.topic}
+                    </Text>
+
+                    <View style={styles.requestMeta}>
+                      <Text style={styles.requestAuthor}>{req.authorName}</Text>
+
+                      <View style={styles.interestedBadge}>
+                        <Heart
+                          size={12}
+                          color={Colors.primary[500]}
+                          fill={Colors.primary[100]}
+                        />
+                        <Text style={styles.interestedText}>
+                          {req.interestedCount} interested
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* RIGHT COLUMN (or full-width on mobile) */}
+          <View style={isWide ? styles.rightCol : undefined}>
+            {/* ── YOUR PODS ────────────────────────────────── */}
+            <SectionHeader
+              title="Your Pods"
+              onSeeAll={() => router.push('/pods' as any)}
+            />
+
+            {pods.length === 0 ? (
+              <EmptyState
+                icon={<FolderOpen size={32} color={Colors.neutral[300]} />}
+                message="You haven't joined any pods yet."
+              />
+            ) : isWide ? (
+              /* On desktop, stack pod cards vertically inside right column */
+              <View style={styles.podsVertical}>
+                {pods.map((pod) => (
+                  <PodCardContent key={pod.id} pod={pod} router={router} />
+                ))}
+              </View>
+            ) : (
+              /* On mobile, keep horizontal scroll */
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.podsScroll}
+              >
+                {pods.map((pod) => (
+                  <PodCardContent key={pod.id} pod={pod} router={router} />
+                ))}
+              </ScrollView>
+            )}
+          </View>
         </View>
 
-        {/* ── YOUR PODS ──────────────────────────────────── */}
-        <SectionHeader
-          title="Your Pods"
-          onSeeAll={() => router.push('/pods' as any)}
-        />
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.podsScroll}
-        >
-          {pods.map((pod) => {
-            const progress =
-              pod.tasksTotal > 0 ? pod.tasksDone / pod.tasksTotal : 0;
-
-            return (
-              <TouchableOpacity
-                key={pod.id}
-                activeOpacity={0.7}
-                style={styles.podCard}
-                onPress={() => router.push('/pods' as any)}
-              >
-                {/* course badge */}
-                <View style={styles.podBadgeRow}>
-                  <View style={styles.podCourseBadge}>
-                    <Text style={styles.podCourseText}>{pod.courseCode}</Text>
-                  </View>
-                </View>
-
-                {/* name */}
-                <Text style={styles.podName} numberOfLines={1}>
-                  {pod.name}
-                </Text>
-
-                {/* topic snippet */}
-                <Text style={styles.podTopic} numberOfLines={1}>
-                  {pod.topic}
-                </Text>
-
-                {/* members */}
-                <View style={styles.podMemberRow}>
-                  <Users size={13} color={Colors.neutral[500]} />
-                  <Text style={styles.podMemberText}>
-                    {pod.members.length} members
-                  </Text>
-                </View>
-
-                {/* progress bar */}
-                <View style={styles.progressBarBg}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      { width: `${Math.round(progress * 100)}%` },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.progressLabel}>
-                  {pod.tasksDone}/{pod.tasksTotal} tasks
-                </Text>
-
-                {/* last message */}
-                {pod.lastMessage ? (
-                  <View style={styles.podLastMsg}>
-                    <MessageSquare
-                      size={12}
-                      color={Colors.neutral[400]}
-                    />
-                    <Text style={styles.podLastMsgText} numberOfLines={2}>
-                      {pod.lastMessage}
-                    </Text>
-                  </View>
-                ) : null}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* bottom spacer so FAB doesn't cover content */}
-        <View style={{ height: 96 }} />
+        {/* bottom spacer */}
+        <View style={styles.bottomSpacer} />
       </ScrollView>
-
-      {/* ── FAB ──────────────────────────────────────────── */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={styles.fab}
-        onPress={() => router.push('/study-request' as any)}
-      >
-        <Plus size={26} color={Colors.neutral[0]} strokeWidth={2.5} />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -297,15 +275,93 @@ function SectionHeader({
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <TouchableOpacity
+      <Pressable
         onPress={onSeeAll}
         style={styles.seeAllBtn}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
         <Text style={styles.seeAllText}>See All</Text>
         <ChevronRight size={16} color={Colors.primary[500]} />
-      </TouchableOpacity>
+      </Pressable>
     </View>
+  );
+}
+
+function EmptyState({
+  icon,
+  message,
+}: {
+  icon: React.ReactNode;
+  message: string;
+}) {
+  return (
+    <View style={styles.emptyState}>
+      {icon}
+      <Text style={styles.emptyStateText}>{message}</Text>
+    </View>
+  );
+}
+
+function PodCardContent({
+  pod,
+  router,
+}: {
+  pod: any;
+  router: any;
+}) {
+  const progress = pod.tasksTotal > 0 ? pod.tasksDone / pod.tasksTotal : 0;
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.podCard, pressed && styles.cardPressed]}
+      onPress={() => router.push('/pods' as any)}
+    >
+      {/* course badge */}
+      <View style={styles.podBadgeRow}>
+        <View style={styles.podCourseBadge}>
+          <Text style={styles.podCourseText}>{pod.courseCode}</Text>
+        </View>
+      </View>
+
+      {/* name */}
+      <Text style={styles.podName} numberOfLines={1}>
+        {pod.name}
+      </Text>
+
+      {/* topic snippet */}
+      <Text style={styles.podTopic} numberOfLines={1}>
+        {pod.topic}
+      </Text>
+
+      {/* members */}
+      <View style={styles.podMemberRow}>
+        <Users size={13} color={Colors.neutral[500]} />
+        <Text style={styles.podMemberText}>{pod.members.length} members</Text>
+      </View>
+
+      {/* progress bar */}
+      <View style={styles.progressBarBg}>
+        <View
+          style={[
+            styles.progressBarFill,
+            { width: `${Math.round(progress * 100)}%` },
+          ]}
+        />
+      </View>
+      <Text style={styles.progressLabel}>
+        {pod.tasksDone}/{pod.tasksTotal} tasks
+      </Text>
+
+      {/* last message */}
+      {pod.lastMessage ? (
+        <View style={styles.podLastMsg}>
+          <MessageSquare size={12} color={Colors.neutral[400]} />
+          <Text style={styles.podLastMsgText} numberOfLines={2}>
+            {pod.lastMessage}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -315,15 +371,29 @@ const styles = StyleSheet.create({
   /* layout */
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: OFF_WHITE,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.lg,
     paddingBottom: Spacing.xl,
+  },
+
+  /* loading */
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  loadingText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 15,
+    lineHeight: 22,
+    color: Colors.neutral[500],
   },
 
   /* header */
@@ -331,33 +401,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
   headerText: {
     flex: 1,
   },
   greeting: {
-    ...Typography.h1,
-    color: Colors.neutral[900],
+    fontFamily: 'SourceSerifPro-Bold',
+    fontSize: 32,
+    lineHeight: 40,
+    color: FOREST,
   },
   subtitle: {
-    ...Typography.body,
-    color: Colors.neutral[500],
-    marginTop: 2,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primary[500],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Spacing.md,
-  },
-  avatarText: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Inter-Regular',
     fontSize: 15,
-    color: Colors.neutral[0],
+    lineHeight: 22,
+    color: Colors.neutral[500],
+    marginTop: 4,
   },
 
   /* quick stats */
@@ -381,24 +441,36 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
   },
   statIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary[50],
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.secondary[50],
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.sm,
   },
   statValue: {
     fontFamily: 'SourceSerifPro-Bold',
-    fontSize: 22,
-    color: Colors.primary[500],
-    lineHeight: 28,
+    fontSize: 26,
+    lineHeight: 32,
+    color: FOREST,
   },
   statLabel: {
     ...Typography.caption,
     color: Colors.neutral[500],
     marginTop: 2,
+  },
+
+  /* two-column desktop layout */
+  twoColWrapper: {
+    flexDirection: 'row',
+    gap: Spacing.lg,
+  },
+  leftCol: {
+    flex: 3,
+  },
+  rightCol: {
+    flex: 2,
   },
 
   /* section header */
@@ -422,6 +494,45 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
 
+  /* Create Study Request CTA — premium forest green */
+  createRequestCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: FOREST,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+    gap: Spacing.md,
+    ...Shadows.md,
+  },
+  createRequestCtaPressed: {
+    opacity: 0.88,
+  },
+  createRequestIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createRequestText: {
+    flex: 1,
+  },
+  createRequestTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    lineHeight: 22,
+    color: Colors.neutral[0],
+  },
+  createRequestSubtitle: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+
   /* study-request cards */
   requestsGrid: {
     flexDirection: 'row',
@@ -433,12 +544,18 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.neutral[200],
+    borderLeftWidth: 3,
+    borderLeftColor: GOLD,
     padding: Spacing.md,
+    paddingLeft: Spacing.md + 2,
     marginBottom: Spacing.sm,
   },
   requestCardWide: {
     width: '48.5%' as any,
     marginBottom: 0,
+  },
+  cardPressed: {
+    opacity: 0.85,
   },
   requestTopRow: {
     flexDirection: 'row',
@@ -484,17 +601,36 @@ const styles = StyleSheet.create({
     color: Colors.primary[500],
   },
 
-  /* pod cards (horizontal scroll) */
+  /* empty states */
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xxl,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  emptyStateText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.neutral[400],
+    textAlign: 'center',
+  },
+
+  /* pod cards */
   podsScroll: {
     paddingRight: Spacing.lg,
     paddingBottom: Spacing.xs,
   },
+  podsVertical: {
+    gap: Spacing.md,
+  },
   podCard: {
-    width: 200,
+    width: 228,
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginRight: Spacing.sm,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    marginRight: Spacing.md,
     ...Shadows.md,
   },
   podBadgeRow: {
@@ -513,15 +649,15 @@ const styles = StyleSheet.create({
   },
   podName: {
     fontFamily: 'SourceSerifPro-SemiBold',
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 17,
+    lineHeight: 24,
     color: Colors.neutral[900],
     marginBottom: 2,
   },
   podTopic: {
     ...Typography.caption,
     color: Colors.neutral[500],
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   podMemberRow: {
     flexDirection: 'row',
@@ -544,7 +680,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: 5,
-    backgroundColor: Colors.primary[500],
+    backgroundColor: FOREST,
     borderRadius: 3,
   },
   progressLabel: {
@@ -568,51 +704,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  /* Create Study Request CTA */
-  createRequestCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary[50],
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.primary[200],
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-    gap: Spacing.md,
-  },
-  createRequestIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary[500],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  createRequestText: {
-    flex: 1,
-  },
-  createRequestTitle: {
-    ...Typography.bodySemiBold,
-    color: Colors.primary[700],
-  },
-  createRequestSubtitle: {
-    ...Typography.caption,
-    color: Colors.primary[400],
-    marginTop: 1,
-  },
-
-  /* FAB */
-  fab: {
-    position: 'absolute',
-    bottom: Platform.OS === 'web' ? 24 : 100,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primary[500],
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.lg,
-    zIndex: 10,
+  /* bottom spacer */
+  bottomSpacer: {
+    height: Spacing.xl,
   },
 });

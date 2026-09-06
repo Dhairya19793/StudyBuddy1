@@ -52,7 +52,7 @@ export default function PodsScreen() {
     useCallback(() => { refetchPods(); }, [refetchPods]),
   );
 
-  const isWideScreen = width > 768;
+  const isWideScreen = width > 900;
   const numColumns = isWideScreen ? 2 : 1;
 
   /* ── Handlers ─────────────────────────────────── */

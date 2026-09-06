@@ -1,61 +1,52 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, View, Platform } from 'react-native';
+import { StyleSheet, View, Text, Platform, useWindowDimensions, Pressable } from 'react-native';
 import { BookOpen, Users, ClipboardList, User, Home } from 'lucide-react-native';
-import { Colors } from '@/constants/theme';
+import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
+
+const FOREST = '#2D5F3A';
+
+const TAB_ITEMS = [
+  { name: 'index', title: 'Home', Icon: Home },
+  { name: 'courses', title: 'Courses', Icon: BookOpen },
+  { name: 'pods', title: 'Pods', Icon: Users },
+  { name: 'workspace', title: 'Solo', Icon: ClipboardList },
+  { name: 'profile', title: 'Profile', Icon: User },
+] as const;
 
 export default function TabLayout() {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 900;
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.primary[500],
+        tabBarActiveTintColor: FOREST,
         tabBarInactiveTintColor: Colors.neutral[400],
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarItemStyle: styles.tabBarItem,
+        tabBarStyle: isDesktop ? styles.sideBar : styles.bottomBar,
+        tabBarLabelStyle: isDesktop ? styles.sideBarLabel : styles.bottomBarLabel,
+        tabBarItemStyle: isDesktop ? styles.sideBarItem : styles.bottomBarItem,
+        tabBarPosition: isDesktop ? 'left' : 'bottom',
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="courses"
-        options={{
-          title: 'Courses',
-          tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="pods"
-        options={{
-          title: 'Pods',
-          tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="workspace"
-        options={{
-          title: 'Solo',
-          tabBarIcon: ({ color, size }) => <ClipboardList size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
-        }}
-      />
+      {TAB_ITEMS.map((tab) => (
+        <Tabs.Screen
+          key={tab.name}
+          name={tab.name}
+          options={{
+            title: tab.title,
+            tabBarIcon: ({ color, size }) => (
+              <tab.Icon size={isDesktop ? 20 : size} color={color} />
+            ),
+          }}
+        />
+      ))}
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
+  bottomBar: {
     backgroundColor: Colors.surface,
     borderTopColor: Colors.neutral[200],
     borderTopWidth: 1,
@@ -63,12 +54,33 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: Platform.OS === 'web' ? 8 : 28,
   },
-  tabBarLabel: {
+  bottomBarLabel: {
     fontFamily: 'Inter-Medium',
     fontSize: 11,
     marginTop: 2,
   },
-  tabBarItem: {
+  bottomBarItem: {
     paddingTop: 4,
+  },
+  sideBar: {
+    backgroundColor: Colors.surface,
+    borderRightColor: Colors.neutral[200],
+    borderRightWidth: 1,
+    width: 220,
+    paddingTop: 24,
+    paddingHorizontal: 8,
+    ...(Shadows.sm as any),
+  },
+  sideBarLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  sideBarItem: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: BorderRadius.md,
+    marginBottom: 2,
+    justifyContent: 'flex-start',
   },
 });

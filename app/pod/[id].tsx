@@ -36,10 +36,14 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import type { PeerPod, Message, PodMember } from '@/constants/mockData';
 import { usePods, usePodMessages, usePodTasks } from '@/hooks/useStudyData';
+
+let ImagePicker: typeof import('expo-image-picker') | null = null;
+if (Platform.OS !== 'web') {
+  ImagePicker = require('expo-image-picker');
+}
 
 const FOREST_GREEN = '#2D5F3A';
 const MUTED_GOLD = '#C9A93D';
@@ -103,9 +107,29 @@ export default function PodDetailScreen() {
     [messages],
   );
 
+  const webFileInputRef = useRef<HTMLInputElement | null>(null);
+
   const handlePickImage = useCallback(async () => {
     setUploadError(null);
     try {
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (!file) return;
+          if (!file.type.startsWith('image/')) {
+            setUploadError('Only image files are allowed.');
+            return;
+          }
+          const uri = URL.createObjectURL(file);
+          setPendingImage({ uri, name: file.name, type: file.type });
+        };
+        input.click();
+        return;
+      }
+      if (!ImagePicker) return;
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.8,
