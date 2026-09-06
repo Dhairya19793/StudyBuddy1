@@ -30,8 +30,9 @@ import {
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import { useDemoUser } from '@/contexts/DemoUserContext';
-import { useCourses, useStudyRequests, usePods, useSoloTasks } from '@/hooks/useStudyData';
+import { useCourses, useStudyRequests, usePods, useSoloTasks, useWeekSchedule } from '@/hooks/useStudyData';
 import UserSwitcher from '@/components/UserSwitcher';
+import CalendarSchedule from '@/components/CalendarSchedule';
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -81,6 +82,7 @@ export default function HomeScreen() {
   const { data: studyRequests, refetch: refetchRequests } = useStudyRequests();
   const { data: pods, refetch: refetchPods } = usePods();
   const { data: soloTasks } = useSoloTasks();
+  const { data: weekSchedule, loading: weekLoading } = useWeekSchedule();
 
   useFocusEffect(
     useCallback(() => {
@@ -158,11 +160,16 @@ export default function HomeScreen() {
           </View>
         </StaggerIn>
 
+        {/* CALENDAR SCHEDULE */}
+        <StaggerIn index={2}>
+          <CalendarSchedule items={weekSchedule} loading={weekLoading} />
+        </StaggerIn>
+
         {/* 2-col on desktop */}
         <View style={isWide ? styles.twoColWrapper : undefined}>
           <View style={isWide ? styles.leftCol : undefined}>
             {/* CTA */}
-            <StaggerIn index={2}>
+            <StaggerIn index={3}>
               <Pressable
                 style={({ pressed }) => [
                   styles.cta,
@@ -182,7 +189,7 @@ export default function HomeScreen() {
             </StaggerIn>
 
             {/* RECENT REQUESTS */}
-            <StaggerIn index={3}>
+            <StaggerIn index={4}>
               <SectionHeader
                 title="Recent Study Requests"
                 onSeeAll={() => router.push('/courses' as any)}
@@ -190,7 +197,7 @@ export default function HomeScreen() {
             </StaggerIn>
 
             {studyRequests.length === 0 ? (
-              <StaggerIn index={4}>
+              <StaggerIn index={5}>
                 <EmptyState
                   icon={<Inbox size={32} color={Colors.neutral[300]} />}
                   message="No study requests yet — create one above!"
@@ -199,7 +206,7 @@ export default function HomeScreen() {
             ) : (
               <View style={isWide ? styles.requestsGrid : undefined}>
                 {studyRequests.slice(0, isWide ? 4 : 3).map((req, idx) => (
-                  <StaggerIn key={req.id} index={4 + idx} style={isWide ? styles.requestCardWide : undefined}>
+                  <StaggerIn key={req.id} index={5 + idx} style={isWide ? styles.requestCardWide : undefined}>
                     <Pressable
                       style={({ pressed }) => [
                         styles.requestCard,
@@ -234,7 +241,7 @@ export default function HomeScreen() {
 
           {/* PODS */}
           <View style={isWide ? styles.rightCol : undefined}>
-            <StaggerIn index={5}>
+            <StaggerIn index={6}>
               <SectionHeader
                 title="Your Pods"
                 onSeeAll={() => router.push('/pods' as any)}
@@ -242,7 +249,7 @@ export default function HomeScreen() {
             </StaggerIn>
 
             {pods.length === 0 ? (
-              <StaggerIn index={6}>
+              <StaggerIn index={7}>
                 <EmptyState
                   icon={<FolderOpen size={32} color={Colors.neutral[300]} />}
                   message="You haven't joined any pods yet."
@@ -251,7 +258,7 @@ export default function HomeScreen() {
             ) : isWide ? (
               <View style={styles.podsVertical}>
                 {pods.map((pod, idx) => (
-                  <StaggerIn key={pod.id} index={6 + idx}>
+                  <StaggerIn key={pod.id} index={7 + idx}>
                     <PodCard pod={pod} router={router} isWide />
                   </StaggerIn>
                 ))}
@@ -263,7 +270,7 @@ export default function HomeScreen() {
                 contentContainerStyle={styles.podsScroll}
               >
                 {pods.map((pod, idx) => (
-                  <StaggerIn key={pod.id} index={6 + idx}>
+                  <StaggerIn key={pod.id} index={7 + idx}>
                     <PodCard pod={pod} router={router} />
                   </StaggerIn>
                 ))}

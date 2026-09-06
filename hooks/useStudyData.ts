@@ -1884,7 +1884,7 @@ export function useUserAvailability(profileId: string): {
 
 export interface ScheduleItem {
   id: string;
-  type: 'availability' | 'task';
+  type: 'availability' | 'task' | 'pod-meeting';
   title: string;
   day: string;
   startTime?: string;
@@ -1955,6 +1955,118 @@ export function useTodaySchedule(): {
         }
         if (a.type === 'availability') return -1;
         if (b.type === 'availability') return 1;
+        return 0;
+      });
+
+      if (!cancelled) {
+        setData(items);
+        setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentUser.id]);
+
+  return { data, loading };
+}
+
+// ────────────────────────────────────────────────────────────
+// WEEK SCHEDULE (availability, tasks, and pod meetings for all 7 days)
+// ────────────────────────────────────────────────────────────
+
+export function useWeekSchedule(): {
+  data: ScheduleItem[];
+  loading: boolean;
+} {
+  const { currentUser } = useDemoUser();
+  const [data, setData] = useState<ScheduleItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+      const items: ScheduleItem[] = [];
+
+      // 1. All availability blocks
+      const { data: blocks } = await supabase
+        .from('availability_blocks')
+        .select('id, day_of_week, start_time, end_time')
+        .eq('profile_id', currentUser.id)
+        .order('start_time', { ascending: true });
+
+      (blocks ?? []).forEach((b: any) => {
+        items.push({
+          id: `avail-${b.id}`,
+          type: 'availability',
+          title: 'Free to study',
+          day: b.day_of_week,
+          startTime: b.start_time,
+          endTime: b.end_time,
+        });
+      });
+
+      // 2. Incomplete solo tasks (shown on today's day)
+      const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const { data: tasks } = await supabase
+        .from('task_completions')
+        .select('id, text, course_id, completed, courses!task_completions_course_id_fkey(code)')
+        .eq('profile_id', currentUser.id)
+        .eq('completed', false)
+        .order('sort_order', { ascending: true });
+
+      (tasks ?? []).forEach((t: any) => {
+        items.push({
+          id: `task-${t.id}`,
+          type: 'task',
+          title: t.text,
+          day: todayName,
+          courseCode: t.courses?.code,
+        });
+      });
+
+      // 3. Pod meetings (pods the user is a member of, shown on today)
+      const { data: memberships } = await supabase
+        .from('pod_members')
+        .select('pod_id')
+        .eq('profile_id', currentUser.id);
+
+      if (memberships && memberships.length > 0) {
+        const podIds = memberships.map((m: any) => m.pod_id);
+        const { data: pods } = await supabase
+          .from('pods')
+          .select('id, name, topic, courses!pods_course_id_fkey(code)')
+          .in('id', podIds);
+
+        (pods ?? []).forEach((p: any) => {
+          items.push({
+            id: `pod-${p.id}`,
+            type: 'pod-meeting',
+            title: p.name,
+            day: todayName,
+            courseCode: p.courses?.code,
+          });
+        });
+      }
+
+      if (cancelled) return;
+
+      // Sort by day, then availability by start time, then pods, then tasks
+      items.sort((a, b) => {
+        const dayA = WEEKDAYS.indexOf(a.day);
+        const dayB = WEEKDAYS.indexOf(b.day);
+        if (dayA !== dayB) return dayA - dayB;
+        if (a.type === 'availability' && b.type === 'availability') {
+          return (a.startTime ?? '').localeCompare(b.startTime ?? '');
+        }
+        if (a.type === 'availability') return -1;
+        if (b.type === 'availability') return 1;
+        if (a.type === 'pod-meeting' && b.type === 'pod-meeting') return 0;
+        if (a.type === 'pod-meeting') return -1;
+        if (b.type === 'pod-meeting') return 1;
         return 0;
       });
 

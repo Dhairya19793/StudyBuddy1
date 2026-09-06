@@ -22,13 +22,10 @@ import {
   ChevronRight,
   LogOut,
   Settings,
-  Clock,
-  CheckCircle2,
-  Calendar,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import { useDemoUser } from '@/contexts/DemoUserContext';
-import { useCourses, usePods, useSoloTasks, useTodaySchedule } from '@/hooks/useStudyData';
+import { useCourses, usePods, useSoloTasks } from '@/hooks/useStudyData';
 import UserSwitcher from '@/components/UserSwitcher';
 
 /* ── Design tokens ─────────────────────────────────────────────────── */
@@ -79,42 +76,14 @@ export default function ProfileScreen() {
   const { data: courses } = useCourses();
   const { data: pods } = usePods();
   const { data: soloTasks } = useSoloTasks();
-  const { data: schedule, loading: scheduleLoading } = useTodaySchedule();
 
   const courseCount = courses.length;
   const podCount = pods.length;
   const taskCount = soloTasks.length;
 
-  const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-
   const hasInstagram = !!currentUser.instagram;
   const hasDiscord = !!currentUser.discord;
   const hasSocialLinks = hasInstagram || hasDiscord;
-
-  const scheduleBody = scheduleLoading
-    ? <Text style={styles.scheduleNote}>Loading…</Text>
-    : schedule.length === 0
-      ? <Text style={styles.scheduleNote}>Nothing planned for today. Enjoy the break or add a study task!</Text>
-      : schedule.map((item) => (
-          <View key={item.id} style={styles.scheduleRow}>
-            <View style={styles.scheduleIconWrap}>
-              {item.type === 'availability' ? (
-                <Clock size={16} color={Colors.primary[500]} />
-              ) : (
-                <CheckCircle2 size={16} color={Colors.secondary[500]} />
-              )}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.scheduleTitle}>{item.title}</Text>
-              {item.startTime && item.endTime ? (
-                <Text style={styles.scheduleTime}>{item.startTime} - {item.endTime}</Text>
-              ) : null}
-              {item.courseCode ? (
-                <Text style={styles.scheduleCourse}>{item.courseCode}</Text>
-              ) : null}
-            </View>
-          </View>
-        ));
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -191,17 +160,6 @@ export default function ProfileScreen() {
             <Text style={styles.statCount}>{taskCount}</Text>
             <Text style={styles.statLabel}>Tasks</Text>
           </View>
-        </View>
-
-        {/* ──────────────── Today's Schedule ──────────────── */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeader}>
-            <Calendar size={18} color={Colors.primary[500]} />
-            <Text style={styles.sectionTitle}>Today's Schedule</Text>
-            <Text style={styles.todayBadge}>{todayName}</Text>
-          </View>
-
-          {scheduleBody}
         </View>
 
         {/* ──────────────── Social links ──────────────── */}
@@ -590,52 +548,4 @@ const styles = StyleSheet.create({
     color: Colors.error[500],
   },
 
-  /* Schedule */
-  todayBadge: {
-    ...Typography.small,
-    color: Colors.primary[500],
-    fontFamily: 'Inter-SemiBold',
-    marginLeft: 'auto',
-    backgroundColor: Colors.primary[50],
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-  },
-  scheduleNote: {
-    ...Typography.caption,
-    color: Colors.neutral[500],
-    paddingVertical: Spacing.sm,
-    fontStyle: 'italic',
-  },
-  scheduleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingVertical: Spacing.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.neutral[200],
-  },
-  scheduleIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary[50],
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scheduleTitle: {
-    ...Typography.bodyMedium,
-    color: Colors.neutral[800],
-  },
-  scheduleTime: {
-    ...Typography.caption,
-    color: Colors.neutral[500],
-    marginTop: 2,
-  },
-  scheduleCourse: {
-    ...Typography.small,
-    color: Colors.primary[500],
-    fontFamily: 'Inter-SemiBold',
-    marginTop: 1,
-  },
 });
