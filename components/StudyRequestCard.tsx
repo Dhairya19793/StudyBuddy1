@@ -30,6 +30,7 @@ export default function StudyRequestCard({ request, onJoin }: StudyRequestCardPr
       <View style={styles.header}>
         <Avatar initials={request.authorInitials} size={36} />
         <View style={styles.headerText}>
+          
           <Text style={styles.authorName}>{request.authorName}</Text>
           <Text style={styles.timestamp}>{request.createdAt}</Text>
         </View>

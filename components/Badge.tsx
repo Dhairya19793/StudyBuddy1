@@ -11,20 +11,26 @@ interface BadgeProps {
   size?: BadgeSize;
 }
 
+
+
 const variantStyles: Record<BadgeVariant, { backgroundColor: string; color: string }> = {
   primary: {
+
     backgroundColor: Colors.primary[50],
     color: Colors.primary[700],
   },
   secondary: {
+
     backgroundColor: Colors.secondary[50],
     color: Colors.secondary[700],
   },
   success: {
+    
     backgroundColor: Colors.success[50],
     color: Colors.success[600],
   },
   warning: {
+
     backgroundColor: Colors.warning[50],
     color: Colors.warning[600],
   },

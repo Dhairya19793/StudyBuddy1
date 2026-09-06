@@ -9,7 +9,7 @@ interface MessageBubbleProps {
   message: Message;
   onViewRequest?: (studyRequestId: string) => void;
 }
-
+//creates the message layout
 export default function MessageBubble({ message, onViewRequest }: MessageBubbleProps) {
   const isOwn = message.isOwn === true;
 
@@ -81,6 +81,8 @@ export default function MessageBubble({ message, onViewRequest }: MessageBubbleP
     </View>
   );
 }
+
+//style choices for the message
 
 const styles = StyleSheet.create({
   row: {
