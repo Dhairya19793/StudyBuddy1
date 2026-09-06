@@ -1354,8 +1354,9 @@ export function useSaveAvailabilityBlocks() {
 export interface Conversation {
   channelId: string;
   name: string;
-  type: 'course' | 'pod';
+  type: 'course' | 'pod' | 'dm';
   entityId: string;
+  otherUserId?: string;
   lastMessage?: string;
   lastMessageTime?: string;
   lastMessageAt?: string;
@@ -1398,22 +1399,41 @@ export function useConversations(): {
       const courseIds = (courseMemberships ?? []).map((m: any) => m.course_id);
       const podIds = (podMemberships ?? []).map((m: any) => m.pod_id);
 
-      // 3. Get all channels for these courses and pods
+      // 3. Get all channels for these courses, pods, and DMs
       let allChannels: any[] = [];
       if (courseIds.length > 0) {
         const { data: courseChannels } = await supabase
           .from('channels')
-          .select('id, course_id, pod_id, name')
+          .select('id, course_id, pod_id, name, is_direct, user1_id, user2_id')
           .in('course_id', courseIds);
         allChannels = allChannels.concat(courseChannels ?? []);
       }
       if (podIds.length > 0) {
         const { data: podChannels } = await supabase
           .from('channels')
-          .select('id, course_id, pod_id, name')
+          .select('id, course_id, pod_id, name, is_direct, user1_id, user2_id')
           .in('pod_id', podIds);
         allChannels = allChannels.concat(podChannels ?? []);
       }
+      // Get DM channels where current user is a participant
+      const { data: dmChannels1 } = await supabase
+        .from('channels')
+        .select('id, course_id, pod_id, name, is_direct, user1_id, user2_id')
+        .eq('is_direct', true)
+        .eq('user1_id', currentUser.id);
+      const { data: dmChannels2 } = await supabase
+        .from('channels')
+        .select('id, course_id, pod_id, name, is_direct, user1_id, user2_id')
+        .eq('is_direct', true)
+        .eq('user2_id', currentUser.id);
+      allChannels = allChannels.concat(dmChannels1 ?? [], dmChannels2 ?? []);
+      // Deduplicate by id
+      const seenIds = new Set<string>();
+      allChannels = allChannels.filter((ch) => {
+        if (seenIds.has(ch.id)) return false;
+        seenIds.add(ch.id);
+        return true;
+      });
 
       if (cancelled) return;
       if (allChannels.length === 0) { setData([]); setLoading(false); return; }
@@ -1481,7 +1501,28 @@ export function useConversations(): {
             unreadCount = count ?? 0;
           }
 
-          if (isCourse) {
+          if (ch.is_direct) {
+            // DM channel — get the other user's info
+            const otherUserId = ch.user1_id === currentUser.id ? ch.user2_id : ch.user1_id;
+            const { data: otherUser } = await supabase
+              .from('profiles')
+              .select('name, initials')
+              .eq('id', otherUserId)
+              .maybeSingle();
+            return {
+              channelId: ch.id,
+              name: otherUser?.name ?? 'Direct Message',
+              type: 'dm' as const,
+              entityId: ch.id,
+              otherUserId,
+              lastMessage: lastMsg?.body,
+              lastMessageTime: lastMsg ? timeAgo(lastMsg.created_at) : undefined,
+              lastMessageAt: lastMsg?.created_at,
+              unreadCount,
+              initials: otherUser?.initials ?? 'DM',
+              color: '#5B7C99',
+            };
+          } else if (isCourse) {
             const course = courseMap.get(entityId);
             return {
               channelId: ch.id,
@@ -1551,4 +1592,286 @@ export function useMarkChannelRead() {
     },
     [currentUser.id],
   );
+}
+
+// ────────────────────────────────────────────────────────────
+// DIRECT MESSAGES (1-on-1)
+// ────────────────────────────────────────────────────────────
+
+export function useStartDM() {
+  const { currentUser } = useDemoUser();
+
+  return useCallback(
+    async (otherUserId: string): Promise<string> => {
+      // Check if a DM channel already exists between these two users
+      const { data: existing } = await supabase
+        .from('channels')
+        .select('id')
+        .eq('is_direct', true)
+        .or(`user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`)
+        .or(`user1_id.eq.${otherUserId},user2_id.eq.${otherUserId}`)
+        .limit(10);
+
+      // Filter to find the channel where both users are participants
+      const match = (existing ?? []).find(
+        (ch: any) =>
+          (ch.user1_id === currentUser.id && ch.user2_id === otherUserId) ||
+          (ch.user1_id === otherUserId && ch.user2_id === currentUser.id),
+      );
+
+      if (match) return match.id;
+
+      // Create a new DM channel
+      const { data: newCh, error } = await supabase
+        .from('channels')
+        .insert({
+          is_direct: true,
+          user1_id: currentUser.id,
+          user2_id: otherUserId,
+          name: 'dm',
+        })
+        .select('id')
+        .single();
+
+      if (error || !newCh) throw error ?? new Error('Failed to create DM');
+      return newCh.id;
+    },
+    [currentUser.id],
+  );
+}
+
+export function useDMMessages(channelId: string): {
+  data: Message[];
+  loading: boolean;
+  refetch: () => void;
+  sendMessage: (text: string) => Promise<void>;
+} {
+  const { currentUser } = useDemoUser();
+  const [data, setData] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+    setLoading(true);
+
+    (async () => {
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('*, profiles!messages_author_id_fkey(name, initials)')
+        .eq('channel_id', channelId)
+        .order('created_at', { ascending: true });
+
+      if (cancelled || !msgs) return;
+
+      const enriched: Message[] = msgs.map((m: any) => ({
+        id: m.id,
+        authorName: m.profiles?.name ?? 'Unknown',
+        authorInitials: m.profiles?.initials ?? '?',
+        text: m.body,
+        timestamp: formatTime(m.created_at),
+        isStudyRequest: m.is_study_request,
+        studyRequestId: m.study_request_id,
+        isOwn: m.author_id === currentUser.id,
+      }));
+
+      if (!cancelled) {
+        setData(enriched);
+        setLoading(false);
+      }
+
+      if (!cancelled) {
+        realtimeChannel = supabase
+          .channel(`dm-${channelId}`)
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'messages', filter: `channel_id=eq.${channelId}` },
+            async (payload) => {
+              const newRow = payload.new as any;
+              const { data: msgFull } = await supabase
+                .from('messages')
+                .select('*, profiles!messages_author_id_fkey(name, initials)')
+                .eq('id', newRow.id)
+                .single();
+              if (!msgFull) return;
+              const newMessage: Message = {
+                id: msgFull.id,
+                authorName: msgFull.profiles?.name ?? 'Unknown',
+                authorInitials: msgFull.profiles?.initials ?? '?',
+                text: msgFull.body,
+                timestamp: formatTime(msgFull.created_at),
+                isStudyRequest: msgFull.is_study_request,
+                studyRequestId: msgFull.study_request_id,
+                isOwn: msgFull.author_id === currentUser.id,
+              };
+              setData((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
+            },
+          )
+          .subscribe();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+    };
+  }, [channelId, currentUser.id, tick]);
+
+  const sendMessage = useCallback(
+    async (text: string) => {
+      await supabase.from('messages').insert({
+        channel_id: channelId,
+        author_id: currentUser.id,
+        body: text,
+        is_study_request: false,
+      });
+    },
+    [channelId, currentUser.id],
+  );
+
+  return { data, loading, refetch, sendMessage };
+}
+
+// ────────────────────────────────────────────────────────────
+// USER AVAILABILITY (for viewing someone's schedule)
+// ────────────────────────────────────────────────────────────
+
+export interface AvailabilityBlock {
+  id: string;
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
+}
+
+export function useUserAvailability(profileId: string): {
+  data: AvailabilityBlock[];
+  loading: boolean;
+} {
+  const [data, setData] = useState<AvailabilityBlock[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      const { data: blocks } = await supabase
+        .from('availability_blocks')
+        .select('id, day_of_week, start_time, end_time')
+        .eq('profile_id', profileId)
+        .order('day_of_week', { ascending: true });
+
+      if (cancelled) return;
+
+      const enriched: AvailabilityBlock[] = (blocks ?? []).map((b: any) => ({
+        id: b.id,
+        dayOfWeek: b.day_of_week,
+        startTime: b.start_time,
+        endTime: b.end_time,
+      }));
+
+      if (!cancelled) {
+        setData(enriched);
+        setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [profileId]);
+
+  return { data, loading };
+}
+
+// ────────────────────────────────────────────────────────────
+// TODAY'S SCHEDULE
+// ────────────────────────────────────────────────────────────
+
+export interface ScheduleItem {
+  id: string;
+  type: 'availability' | 'task';
+  title: string;
+  day: string;
+  startTime?: string;
+  endTime?: string;
+  courseCode?: string;
+}
+
+export function useTodaySchedule(): {
+  data: ScheduleItem[];
+  loading: boolean;
+} {
+  const { currentUser } = useDemoUser();
+  const [data, setData] = useState<ScheduleItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+
+      // Get availability blocks for today
+      const { data: blocks } = await supabase
+        .from('availability_blocks')
+        .select('id, day_of_week, start_time, end_time')
+        .eq('profile_id', currentUser.id)
+        .eq('day_of_week', todayName)
+        .order('start_time', { ascending: true });
+
+      // Get incomplete solo tasks
+      const { data: tasks } = await supabase
+        .from('task_completions')
+        .select('id, text, course_id, completed, courses!task_completions_course_id_fkey(code)')
+        .eq('profile_id', currentUser.id)
+        .eq('completed', false)
+        .order('sort_order', { ascending: true });
+
+      if (cancelled) return;
+
+      const items: ScheduleItem[] = [];
+
+      (blocks ?? []).forEach((b: any) => {
+        items.push({
+          id: `avail-${b.id}`,
+          type: 'availability',
+          title: 'Free to study',
+          day: b.day_of_week,
+          startTime: b.start_time,
+          endTime: b.end_time,
+        });
+      });
+
+      (tasks ?? []).forEach((t: any) => {
+        items.push({
+          id: `task-${t.id}`,
+          type: 'task',
+          title: t.text,
+          day: todayName,
+          courseCode: t.courses?.code,
+        });
+      });
+
+      // Sort: availability blocks by start time, then tasks
+      items.sort((a, b) => {
+        if (a.type === 'availability' && b.type === 'availability') {
+          return (a.startTime ?? '').localeCompare(b.startTime ?? '');
+        }
+        if (a.type === 'availability') return -1;
+        if (b.type === 'availability') return 1;
+        return 0;
+      });
+
+      if (!cancelled) {
+        setData(items);
+        setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentUser.id]);
+
+  return { data, loading };
 }

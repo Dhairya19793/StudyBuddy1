@@ -25,6 +25,8 @@ import {
   Clock,
   Check,
   Lightbulb,
+  MessageCircle,
+  Calendar,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import type { Course, Message, StudyRequest, HelpType } from '@/constants/mockData';
@@ -38,6 +40,8 @@ import {
   useRequestInterestUsers,
   useCreatePod,
   useMarkChannelRead,
+  useStartDM,
+  useUserAvailability,
 } from '@/hooks/useStudyData';
 import { useDemoUser } from '@/contexts/DemoUserContext';
 import { supabase } from '@/lib/supabase';
@@ -56,6 +60,8 @@ export default function CourseHubScreen() {
   const [podCreatingForId, setPodCreatingForId] = useState<string | null>(null);
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [creatingPod, setCreatingPod] = useState(false);
+  const [scheduleUserId, setScheduleUserId] = useState<string | null>(null);
+  const [scheduleUserName, setScheduleUserName] = useState('');
 
   const isWide = width > 768;
 
@@ -84,6 +90,7 @@ export default function CourseHubScreen() {
   const toggleInterest = useToggleInterest();
   const createPod = useCreatePod();
   const markRead = useMarkChannelRead();
+  const startDM = useStartDM();
 
   // refetch study requests + messages when screen regains focus; mark channel read
   useFocusEffect(
@@ -311,26 +318,70 @@ export default function CourseHubScreen() {
                 <Text style={styles.yourRequestLabelText}>Your Request</Text>
               </View>
             ) : alreadyInterested ? (
-              <Pressable
-                style={styles.interestedActiveBtn}
-                onPress={() => handleToggleInterest(item.id, true)}
-              >
-                <Check size={14} color={Colors.primary[500]} />
-                <Text style={styles.interestedActiveBtnText}>Interested</Text>
-              </Pressable>
+              <View style={styles.srFooterActions}>
+                <Pressable
+                  style={styles.interestedActiveBtn}
+                  onPress={() => handleToggleInterest(item.id, true)}
+                >
+                  <Check size={14} color={Colors.primary[500]} />
+                  <Text style={styles.interestedActiveBtnText}>Interested</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.dmBtn}
+                  onPress={async () => {
+                    const chId = await startDM(item.authorId);
+                    router.push(`/dm/${chId}?otherName=${encodeURIComponent(item.authorName)}` as any);
+                  }}
+                >
+                  <MessageCircle size={14} color={Colors.neutral[0]} />
+                  <Text style={styles.dmBtnText}>Message</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.scheduleBtn}
+                  onPress={() => {
+                    setScheduleUserId(item.authorId);
+                    setScheduleUserName(item.authorName);
+                  }}
+                >
+                  <Calendar size={14} color={Colors.primary[500]} />
+                  <Text style={styles.scheduleBtnText}>Schedule</Text>
+                </Pressable>
+              </View>
             ) : (
-              <Pressable
-                style={styles.srInterestedBtn}
-                onPress={() => handleToggleInterest(item.id, false)}
-              >
-                <Text style={styles.srInterestedBtnText}>I'm Interested</Text>
-              </Pressable>
+              <View style={styles.srFooterActions}>
+                <Pressable
+                  style={styles.srInterestedBtn}
+                  onPress={() => handleToggleInterest(item.id, false)}
+                >
+                  <Text style={styles.srInterestedBtnText}>I'm Interested</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.dmBtn}
+                  onPress={async () => {
+                    const chId = await startDM(item.authorId);
+                    router.push(`/dm/${chId}?otherName=${encodeURIComponent(item.authorName)}` as any);
+                  }}
+                >
+                  <MessageCircle size={14} color={Colors.neutral[0]} />
+                  <Text style={styles.dmBtnText}>Message</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.scheduleBtn}
+                  onPress={() => {
+                    setScheduleUserId(item.authorId);
+                    setScheduleUserName(item.authorName);
+                  }}
+                >
+                  <Calendar size={14} color={Colors.primary[500]} />
+                  <Text style={styles.scheduleBtnText}>Schedule</Text>
+                </Pressable>
+              </View>
             )}
           </View>
         </View>
       );
     },
-    [isWide, currentUser.id, interestedIds, handleToggleInterest],
+    [isWide, currentUser.id, interestedIds, handleToggleInterest, startDM, router],
   );
 
   // ───────────────────────── loading ─────────────────────────
@@ -571,7 +622,57 @@ export default function CourseHubScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Schedule Modal */}
+      <ScheduleModal
+        userId={scheduleUserId}
+        userName={scheduleUserName}
+        onClose={() => { setScheduleUserId(null); setScheduleUserName(''); }}
+      />
     </SafeAreaView>
+  );
+}
+
+function ScheduleModal({
+  userId,
+  userName,
+  onClose,
+}: {
+  userId: string | null;
+  userName: string;
+  onClose: () => void;
+}) {
+  const { data: blocks, loading } = useUserAvailability(userId ?? '');
+
+  return (
+    <Modal visible={userId !== null} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, { maxWidth: 400 }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{userName}'s Schedule</Text>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <Text style={styles.modalCloseBtn}>Done</Text>
+            </Pressable>
+          </View>
+
+          {loading ? (
+            <ActivityIndicator size="small" color={Colors.primary[500]} style={{ padding: Spacing.md }} />
+          ) : blocks.length === 0 ? (
+            <Text style={styles.modalEmpty}>No availability shared yet.</Text>
+          ) : (
+            <ScrollView style={{ maxHeight: 300 }}>
+              {blocks.map((b) => (
+                <View key={b.id} style={styles.schedRow}>
+                  <Calendar size={16} color={Colors.primary[500]} />
+                  <Text style={styles.schedDay}>{b.dayOfWeek}</Text>
+                  <Text style={styles.schedTime}>{b.startTime} - {b.endTime}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
