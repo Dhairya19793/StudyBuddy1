@@ -193,7 +193,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ──────────────── Today's Schedule ──────────────── */
+        {/* ──────────────── Today's Schedule ──────────────── */}
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
             <Calendar size={18} color={Colors.primary[500]} />
