@@ -34,6 +34,9 @@ const variantStyles: Record<BadgeVariant, { backgroundColor: string; color: stri
   },
 };
 
+
+
+
 export default function Badge({ label, variant = 'neutral', size = 'md' }: BadgeProps) {
   const colors = variantStyles[variant];
   const isSmall = size === 'sm';
