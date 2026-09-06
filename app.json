@@ -4,7 +4,7 @@
     "slug": "studymode",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/ChatGPT_Image_Sep_6,_2026,_11_06_26_AM.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -13,7 +13,7 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/ChatGPT_Image_Sep_6,_2026,_11_06_26_AM.png"
     },
     "plugins": [
       "expo-router",

@@ -233,9 +233,65 @@ export function useCreateStudyRequest() {
 
       if (error) throw error;
 
+      // If posting to hub, also post a message in the course channel
+      if (fields.postToHub) {
+        const { data: channel } = await supabase
+          .from('channels')
+          .select('id')
+          .eq('course_id', fields.courseId)
+          .limit(1)
+          .maybeSingle();
+
+        if (channel) {
+          const summary = `Study Request: ${fields.topic} (${fields.helpNeeded})`;
+          await supabase.from('messages').insert({
+            channel_id: channel.id,
+            author_id: currentUser.id,
+            body: summary,
+            is_study_request: true,
+            study_request_id: data.id,
+          });
+        }
+      }
+
       return data.id;
     },
     [currentUser.id],
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// DELETE STUDY REQUEST
+// ────────────────────────────────────────────────────────────
+
+export function useDeleteStudyRequest() {
+  return useCallback(
+    async (requestId: string) => {
+      // Delete associated request interests first
+      await supabase
+        .from('request_interests')
+        .delete()
+        .eq('request_id', requestId);
+
+      // Delete associated availability blocks
+      await supabase
+        .from('availability_blocks')
+        .delete()
+        .eq('study_request_id', requestId);
+
+      // Delete any messages referencing this study request
+      await supabase
+        .from('messages')
+        .delete()
+        .eq('study_request_id', requestId);
+
+      // Finally delete the request itself
+      await supabase
+        .from('study_requests')
+        .delete()
+        .eq('id', requestId);
+    },
+    [],
   );
 }
 
@@ -1644,7 +1700,7 @@ export function useDMMessages(channelId: string): {
   data: Message[];
   loading: boolean;
   refetch: () => void;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string, opts?: { imageUri?: string; imageName?: string; imageMimeType?: string }) => Promise<void>;
 } {
   const { currentUser } = useDemoUser();
   const [data, setData] = useState<Message[]>([]);
@@ -1660,7 +1716,7 @@ export function useDMMessages(channelId: string): {
     (async () => {
       const { data: msgs } = await supabase
         .from('messages')
-        .select('*, profiles!messages_author_id_fkey(name, initials)')
+        .select('*, profiles!messages_author_id_fkey(name, initials), attachments(*)')
         .eq('channel_id', channelId)
         .order('created_at', { ascending: true });
 
@@ -1675,6 +1731,8 @@ export function useDMMessages(channelId: string): {
         isStudyRequest: m.is_study_request,
         studyRequestId: m.study_request_id,
         isOwn: m.author_id === currentUser.id,
+        imageUrl: m.attachments?.[0]?.url ?? null,
+        imageName: m.attachments?.[0]?.filename ?? null,
       }));
 
       if (!cancelled) {
@@ -1692,7 +1750,7 @@ export function useDMMessages(channelId: string): {
               const newRow = payload.new as any;
               const { data: msgFull } = await supabase
                 .from('messages')
-                .select('*, profiles!messages_author_id_fkey(name, initials)')
+                .select('*, profiles!messages_author_id_fkey(name, initials), attachments(*)')
                 .eq('id', newRow.id)
                 .single();
               if (!msgFull) return;
@@ -1705,6 +1763,8 @@ export function useDMMessages(channelId: string): {
                 isStudyRequest: msgFull.is_study_request,
                 studyRequestId: msgFull.study_request_id,
                 isOwn: msgFull.author_id === currentUser.id,
+                imageUrl: (msgFull as any).attachments?.[0]?.url ?? null,
+                imageName: (msgFull as any).attachments?.[0]?.filename ?? null,
               };
               setData((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
             },
@@ -1720,13 +1780,40 @@ export function useDMMessages(channelId: string): {
   }, [channelId, currentUser.id, tick]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
-      await supabase.from('messages').insert({
+    async (text: string, opts?: { imageUri?: string; imageName?: string; imageMimeType?: string }) => {
+      let attachmentUrl: string | null = null;
+      let attachmentFilename: string | null = null;
+      let attachmentMime = opts?.imageMimeType ?? 'image/png';
+
+      if (opts?.imageUri) {
+        const response = await fetch(opts.imageUri);
+        const blob = await response.blob();
+        attachmentFilename = opts.imageName ?? 'image.png';
+        const fileName = `dm/${channelId}/${Date.now()}-${attachmentFilename}`;
+        const { error: uploadError } = await supabase.storage
+          .from('pod-images')
+          .upload(fileName, blob, { contentType: attachmentMime, upsert: false });
+        if (uploadError) throw new Error('Image upload failed');
+        attachmentUrl = supabase.storage.from('pod-images').getPublicUrl(fileName).data.publicUrl;
+      }
+
+      const { data: message, error } = await supabase.from('messages').insert({
         channel_id: channelId,
         author_id: currentUser.id,
-        body: text,
+        body: text || (attachmentFilename ? `Shared ${attachmentFilename}` : ''),
         is_study_request: false,
-      });
+      }).select('id').single();
+      if (error || !message) throw error ?? new Error('Message could not be sent');
+
+      if (attachmentUrl && attachmentFilename) {
+        const { error: attachmentError } = await supabase.from('attachments').insert({
+          message_id: message.id,
+          url: attachmentUrl,
+          filename: attachmentFilename,
+          content_type: attachmentMime,
+        });
+        if (attachmentError) throw attachmentError;
+      }
     },
     [channelId, currentUser.id],
   );
@@ -1754,6 +1841,13 @@ export function useUserAvailability(profileId: string): {
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!profileId) {
+      setData([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     (async () => {

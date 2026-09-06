@@ -30,6 +30,8 @@ export default function MessagesScreen() {
   const markRead = useMarkChannelRead();
   const startDM = useStartDM();
   const [showNewDM, setShowNewDM] = useState(false);
+  const [showConversationSearch, setShowConversationSearch] = useState(false);
+  const [conversationQuery, setConversationQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [people, setPeople] = useState<{ id: string; name: string; initials: string }[]>([]);
   const [searchResults, setSearchResults] = useState<{ id: string; name: string; initials: string }[]>([]);
@@ -80,6 +82,12 @@ export default function MessagesScreen() {
     },
     [markRead, router],
   );
+
+  const filteredConversations = conversations.filter((conversation) => {
+    const query = conversationQuery.trim().toLowerCase();
+    if (!query) return true;
+    return `${conversation.name} ${conversation.lastMessage ?? ''}`.toLowerCase().includes(query);
+  });
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
@@ -173,7 +181,7 @@ export default function MessagesScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={[styles.shell, isWide && styles.shellWide]}>
         <FlatList
-          data={conversations}
+          data={filteredConversations}
           keyExtractor={(item) => item.channelId}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
@@ -187,11 +195,32 @@ export default function MessagesScreen() {
                     {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
                   </Text>
                 </View>
-                <Pressable style={styles.newDMBtn} onPress={() => setShowNewDM(true)}>
-                  <Plus size={18} color={Colors.neutral[0]} />
-                  <Text style={styles.newDMBtnText}>New</Text>
-                </Pressable>
+                <View style={styles.headerActions}>
+                  <Pressable style={styles.searchBtn} onPress={() => setShowConversationSearch((visible) => !visible)}>
+                    <Search size={18} color={Colors.primary[500]} />
+                  </Pressable>
+                  <Pressable style={styles.newDMBtn} onPress={() => setShowNewDM(true)}>
+                    <Plus size={18} color={Colors.neutral[0]} />
+                    <Text style={styles.newDMBtnText}>New</Text>
+                  </Pressable>
+                </View>
               </View>
+              {showConversationSearch && (
+                <View style={styles.conversationSearchRow}>
+                  <Search size={16} color={Colors.neutral[400]} />
+                  <TextInput
+                    style={styles.conversationSearchInput}
+                    placeholder="Search people, classes, or messages..."
+                    placeholderTextColor={Colors.neutral[400]}
+                    value={conversationQuery}
+                    onChangeText={setConversationQuery}
+                    autoFocus
+                  />
+                  <Pressable onPress={() => { setConversationQuery(''); setShowConversationSearch(false); }} hitSlop={8}>
+                    <X size={16} color={Colors.neutral[500]} />
+                  </Pressable>
+                </View>
+              )}
             </View>
           }
           ListEmptyComponent={
@@ -269,6 +298,10 @@ const styles = StyleSheet.create({
 
   header: { marginTop: Spacing.md, marginBottom: Spacing.xl },
   headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  searchBtn: { width: 40, height: 40, borderRadius: BorderRadius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary[50], borderWidth: 1, borderColor: Colors.primary[100] },
+  conversationSearchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md, backgroundColor: Colors.surface, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderWidth: 1, borderColor: Colors.neutral[200] },
+  conversationSearchInput: { flex: 1, fontFamily: 'Inter-Regular', fontSize: 14, color: Colors.neutral[900] },
   title: {
     fontFamily: 'SourceSerifPro-Bold',
     fontSize: 28,

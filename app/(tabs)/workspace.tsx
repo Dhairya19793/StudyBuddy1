@@ -54,6 +54,8 @@ export default function WorkspaceScreen() {
   const { data: plans, loading: plansLoading, refetch: refetchPlans, createPlan, deletePlan } = useStudyPlans();
   const { data: allTasks, loading: tasksLoading, addTask, toggleComplete, toggleStuck, deleteTask, updateTask } = useSoloTasks();
 
+  const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
+
   const [screen, setScreen] = useState<Screen>('plans');
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export default function WorkspaceScreen() {
   // Focus mode timer
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
+  const progressAnimation = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const activePlan = useMemo(() => plans.find((p) => p.id === activePlanId) ?? null, [plans, activePlanId]);
@@ -83,6 +86,15 @@ export default function WorkspaceScreen() {
   const stuckCount = useMemo(() => planTasks.filter((t) => t.isStuck && !t.completed).length, [planTasks]);
   const totalMinutes = useMemo(() => planTasks.reduce((s, t) => s + (t.durationMinutes ?? 0), 0), [planTasks]);
   const progressPct = planTasks.length > 0 ? (completedCount / planTasks.length) * 100 : 0;
+
+  useEffect(() => {
+    Animated.spring(progressAnimation, {
+      toValue: progressPct,
+      useNativeDriver: false,
+      friction: 8,
+      tension: 70,
+    }).start();
+  }, [progressPct, progressAnimation]);
 
   // Timer logic
   useEffect(() => {
@@ -175,6 +187,21 @@ export default function WorkspaceScreen() {
     await deleteTask(id);
     refetchPlans();
   }, [deleteTask, refetchPlans]);
+
+  const handleDeletePlan = useCallback(async (planId: string) => {
+    setDeletingPlanId(planId);
+    try {
+      await deletePlan(planId);
+      if (activePlanId === planId) {
+        setActivePlanId(null);
+        setScreen('plans');
+      }
+    } catch (err) {
+      console.error('Failed to delete plan:', err);
+    } finally {
+      setDeletingPlanId(null);
+    }
+  }, [deletePlan, activePlanId]);
 
   const handleAskPeers = useCallback((task: SoloTask) => {
     if (!activePlan) return;
@@ -329,6 +356,18 @@ export default function WorkspaceScreen() {
                         <Text style={st.dueText}>{daysUntil(activePlan.dueDate)}</Text>
                       </View>
                     )}
+                    <Pressable
+                      style={st.deletePlanBtn}
+                      onPress={() => handleDeletePlan(activePlan.id)}
+                      disabled={deletingPlanId === activePlan.id}
+                    >
+                      {deletingPlanId === activePlan.id ? (
+                        <ActivityIndicator size={16} color={Colors.error[600]} />
+                      ) : (
+                        <Trash2 size={16} color={Colors.error[600]} />
+                      )}
+                      <Text style={st.deletePlanBtnText}>Delete Plan</Text>
+                    </Pressable>
                   </View>
                   <Text style={st.planTitle}>{activePlan.title}</Text>
                   {activePlan.note && <Text style={st.planNote}>{activePlan.note}</Text>}
@@ -340,7 +379,7 @@ export default function WorkspaceScreen() {
                       <Text style={st.progressPct}>{Math.round(progressPct)}%</Text>
                     </View>
                     <View style={st.progressTrack}>
-                      <View style={[st.progressFill, { width: `${progressPct}%` }]} />
+                      <Animated.View style={[st.progressFill, { width: progressAnimation.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]} />
                     </View>
                     <View style={st.statsRow}>
                       {totalMinutes > 0 && (
@@ -685,6 +724,8 @@ const st = StyleSheet.create({
 
   focusCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: FOREST, borderRadius: BorderRadius.md, paddingVertical: Spacing.sm + 4, marginTop: Spacing.sm },
   focusCtaText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: Colors.neutral[0] },
+  deletePlanBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, borderRadius: BorderRadius.full, backgroundColor: Colors.error[50], borderWidth: 1, borderColor: Colors.error[200] },
+  deletePlanBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 12, color: Colors.error[600] },
 
   // Add task
   addRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.lg },

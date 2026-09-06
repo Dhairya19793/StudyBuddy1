@@ -27,6 +27,7 @@ import {
   Lightbulb,
   MessageCircle,
   Calendar,
+  Trash2,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '@/constants/theme';
 import type { Course, Message, StudyRequest, HelpType } from '@/constants/mockData';
@@ -42,6 +43,7 @@ import {
   useMarkChannelRead,
   useStartDM,
   useUserAvailability,
+  useDeleteStudyRequest,
 } from '@/hooks/useStudyData';
 import { useDemoUser } from '@/contexts/DemoUserContext';
 import { supabase } from '@/lib/supabase';
@@ -91,6 +93,8 @@ export default function CourseHubScreen() {
   const createPod = useCreatePod();
   const markRead = useMarkChannelRead();
   const startDM = useStartDM();
+  const deleteRequest = useDeleteStudyRequest();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // refetch study requests + messages when screen regains focus; mark channel read
   useFocusEffect(
@@ -132,6 +136,22 @@ export default function CourseHubScreen() {
   const podRequest = useMemo(
     () => courseRequests.find((r) => r.id === podCreatingForId) ?? null,
     [courseRequests, podCreatingForId],
+  );
+
+  const handleDeleteRequest = useCallback(
+    async (requestId: string) => {
+      setDeletingId(requestId);
+      try {
+        await deleteRequest(requestId);
+        refetchRequests();
+        refetchMessages();
+      } catch (err) {
+        console.error('Failed to delete request:', err);
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [deleteRequest, refetchRequests, refetchMessages],
   );
 
   const handleCreatePod = useCallback(async () => {
@@ -302,20 +322,48 @@ export default function CourseHubScreen() {
               {item.interestedCount} interested
             </Text>
 
-            {isOwnRequest && item.interestedCount >= 2 ? (
-              <Pressable
-                style={styles.createPodBtn}
-                onPress={() => {
-                  setPodCreatingForId(item.id);
-                  setSelectedMembers(new Set());
-                }}
-              >
-                <Users size={14} color={Colors.neutral[0]} />
-                <Text style={styles.createPodBtnText}>Create Peer Pod</Text>
-              </Pressable>
+            {isOwnRequest && item.interestedCount >= 1 ? (
+              <View style={styles.srFooterActions}>
+                <Pressable
+                  style={styles.createPodBtn}
+                  onPress={() => {
+                    setPodCreatingForId(item.id);
+                    setSelectedMembers(new Set());
+                  }}
+                >
+                  <Users size={14} color={Colors.neutral[0]} />
+                  <Text style={styles.createPodBtnText}>Create Pod</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.deleteReqBtn}
+                  onPress={() => handleDeleteRequest(item.id)}
+                  disabled={deletingId === item.id}
+                >
+                  {deletingId === item.id ? (
+                    <ActivityIndicator size={14} color={Colors.error[600]} />
+                  ) : (
+                    <Trash2 size={14} color={Colors.error[600]} />
+                  )}
+                  <Text style={styles.deleteReqBtnText}>Delete</Text>
+                </Pressable>
+              </View>
             ) : isOwnRequest ? (
-              <View style={styles.yourRequestLabel}>
-                <Text style={styles.yourRequestLabelText}>Your Request</Text>
+              <View style={styles.srFooterActions}>
+                <View style={styles.yourRequestLabel}>
+                  <Text style={styles.yourRequestLabelText}>Your Request</Text>
+                </View>
+                <Pressable
+                  style={styles.deleteReqBtn}
+                  onPress={() => handleDeleteRequest(item.id)}
+                  disabled={deletingId === item.id}
+                >
+                  {deletingId === item.id ? (
+                    <ActivityIndicator size={14} color={Colors.error[600]} />
+                  ) : (
+                    <Trash2 size={14} color={Colors.error[600]} />
+                  )}
+                  <Text style={styles.deleteReqBtnText}>Delete</Text>
+                </Pressable>
               </View>
             ) : alreadyInterested ? (
               <View style={styles.srFooterActions}>
@@ -381,7 +429,7 @@ export default function CourseHubScreen() {
         </View>
       );
     },
-    [isWide, currentUser.id, interestedIds, handleToggleInterest, startDM, router],
+    [isWide, currentUser.id, interestedIds, handleToggleInterest, startDM, router, handleDeleteRequest, deletingId],
   );
 
   // ───────────────────────── loading ─────────────────────────
@@ -1263,6 +1311,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 13,
     color: Colors.neutral[0],
+  },
+  deleteReqBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.error[50],
+    paddingHorizontal: Spacing.sm + 4,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.error[200],
+  },
+  deleteReqBtnText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: Colors.error[600],
   },
 
   /* ── Modal ── */
