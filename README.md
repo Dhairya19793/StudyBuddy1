@@ -1,5 +1,6 @@
 # StudyMode
 
+Website - https://studybuddy-calpoly.bolt.host/
 A peer-study platform built for college students. StudyMode helps students find study partners, organize group sessions, and stay on track with shared and individual goals — all in one focused, distraction-free app.
 
 ## Features
